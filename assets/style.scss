@@ -1,9 +1,50 @@
+// 패널·창 색. 어두운 화면이 기본이고, 밝은 테마(html.light)에서 아래 값으로 바뀐다
 :root {
   --copyright-color: white;
+  --ui-panel: #151a25;
+  --ui-panel-border: #2e3749;
+  --ui-text: #e8ecf4;
+  --ui-muted: #a4aec2;
+  --ui-surface: #232b3c;
+  --ui-sunken: rgba(0, 0, 0, 0.24);
+  --ui-line: #3a4459;
+  --ui-field: #0e131c;
+  --ui-accent: #ffb547;
+  --ui-accent-text: #2a1700;
+  --ui-accent-deep: #7a4500;
+  --ui-accent-soft: rgba(255, 181, 71, 0.14);
+  --ui-danger: #e5484d;
+  --ui-danger-soft: rgba(229, 72, 77, 0.16);
+  --ui-danger-text: #ffb3b0;
+  --ui-ok: #3fb950;
+  --ui-ok-soft: rgba(63, 185, 80, 0.18);
+  --ui-ok-text: #9be9a8;
+  --ui-warn: #f0a33a;
+  --ui-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
 :root.light {
   --copyright-color: black;
+  --ui-panel: #ffffff;
+  --ui-panel-border: #d6dce7;
+  --ui-text: #1a2130;
+  --ui-muted: #5a6478;
+  --ui-surface: #eef2f8;
+  --ui-sunken: #f4f6fa;
+  --ui-line: #c9d1de;
+  --ui-field: #ffffff;
+  --ui-accent: #c2410c;
+  --ui-accent-text: #ffffff;
+  --ui-accent-deep: #8f2f08;
+  --ui-accent-soft: rgba(194, 65, 12, 0.1);
+  --ui-danger: #c62f35;
+  --ui-danger-soft: rgba(198, 47, 53, 0.1);
+  --ui-danger-text: #a3242a;
+  --ui-ok: #1f883d;
+  --ui-ok-soft: rgba(31, 136, 61, 0.1);
+  --ui-ok-text: #1a7f37;
+  --ui-warn: #bf7a12;
+  --ui-shadow: 0 10px 30px rgba(20, 30, 50, 0.18);
 }
 
 * {
@@ -89,7 +130,7 @@ div.copyright a {
 }
 
 // ---------------------------------------------------------------------------
-// 패널 공통: 원작 설정창과 같은 회색 카드. 한국어는 단어 단위로 줄바꿈한다
+// 패널 공통: 테마 색을 따르는 카드. 한국어는 단어 단위로 줄바꿈한다
 // ---------------------------------------------------------------------------
 .panel {
   position: fixed;
@@ -98,8 +139,10 @@ div.copyright a {
   z-index: 999;
   max-height: calc(100% - 3rem);
   overflow-y: auto;
-  background: #555;
-  color: #fefefe;
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-panel-border);
+  box-shadow: var(--ui-shadow);
   border-radius: 10px;
   padding: 12px;
   font-size: 10.5pt;
@@ -126,12 +169,12 @@ div.copyright a {
   }
 
   .hint {
-    color: #ececec;
+    color: var(--ui-muted);
     font-size: 10pt;
   }
 
   code {
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--ui-sunken);
     border-radius: 3px;
     padding: 0 4px;
     font-size: 9.5pt;
@@ -145,10 +188,10 @@ div.copyright a {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    color: #fefefe;
-    background: #222;
-    border: none;
-    border-radius: 5px;
+    color: var(--ui-text);
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-line);
+    border-radius: 6px;
     padding: 6px 12px;
     font: inherit;
     line-height: 1.2;
@@ -177,13 +220,14 @@ div.copyright a {
   }
 
   button.primary {
-    background: #00baff;
-    color: #111;
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
+    color: var(--ui-accent-text);
     font-weight: bold;
   }
 
   :focus-visible {
-    outline: 2px solid #00baff;
+    outline: 2px solid var(--ui-accent);
     outline-offset: 2px;
   }
 
@@ -193,10 +237,14 @@ div.copyright a {
   input[type='text'],
   input[type='url'] {
     font: inherit;
-    color: #111;
-    background: #999;
-    border: none;
-    border-radius: 5px;
+    color: var(--ui-text);
+    background: var(--ui-field);
+    border: 1px solid var(--ui-line);
+    border-radius: 6px;
+  }
+
+  ::placeholder {
+    color: var(--ui-muted);
   }
 
   textarea {
@@ -226,7 +274,7 @@ div.copyright a {
   height: 22px;
   margin: 0;
   border-radius: 11px;
-  background: #999;
+  background: var(--ui-line);
   cursor: pointer;
   transition: background 0.2s;
 
@@ -238,12 +286,12 @@ div.copyright a {
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #ddd;
+    background: #fff;
     transition: transform 0.2s;
   }
 
   &:checked {
-    background: #00baff;
+    background: var(--ui-accent);
   }
 
   &:checked::after {
@@ -307,8 +355,8 @@ div.copyright a {
     width: 1.5em;
     height: 1.5em;
     border-radius: 50%;
-    background: #00baff;
-    color: #111;
+    background: var(--ui-accent);
+    color: var(--ui-accent-text);
     font-size: 9pt;
   }
 
@@ -325,6 +373,88 @@ div.copyright a {
     align-items: center;
     gap: 10px;
     padding-right: 40px;
+
+    .sub {
+      color: var(--ui-muted);
+      font-size: 10pt;
+      font-weight: normal;
+    }
+  }
+
+  // 이름 보관함: 서버에 저장된 이름. 이번 추첨과 구분되게 테두리 상자에 그룹별로 둔다
+  .vault {
+    display: grid;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 10px;
+    border: 1px solid var(--ui-line);
+    border-radius: 8px;
+    background: var(--ui-sunken);
+  }
+
+  .vault-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+
+    .roster-actions {
+      margin-left: auto;
+    }
+  }
+
+  .vault-title {
+    font-weight: bold;
+  }
+
+  .vault-note,
+  .vault-group-count {
+    color: var(--ui-muted);
+    font-size: 9.5pt;
+  }
+
+  .vault-groups {
+    display: grid;
+    gap: 10px;
+
+    &:empty {
+      display: none;
+    }
+
+    // 보관함 칩은 누르면 위로 들어간다
+    .chip::before {
+      content: '+';
+      margin-right: 4px;
+      opacity: 0.8;
+    }
+  }
+
+  .vault-group {
+    display: grid;
+    gap: 6px;
+  }
+
+  .vault-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    button {
+      margin-left: auto;
+    }
+  }
+
+  .vault-group-title {
+    font-weight: bold;
+  }
+
+  .chip-keep {
+    padding: 2px 9px;
+    border: none;
+    border-radius: 999px;
+    background: var(--ui-accent-deep);
+    color: #fff;
+    font-size: 9.5pt;
   }
 
   .add-name {
@@ -336,7 +466,6 @@ div.copyright a {
       min-width: 0;
       height: 32px;
       padding: 0 10px;
-      background: #ddd;
     }
   }
 
@@ -374,7 +503,7 @@ div.copyright a {
   .more {
     summary {
       width: fit-content;
-      color: #ececec;
+      color: var(--ui-text);
       font-weight: bold;
       cursor: pointer;
     }
@@ -387,13 +516,13 @@ div.copyright a {
 
   .field-error {
     padding: 6px 8px;
-    border-radius: 5px;
-    background: rgba(140, 0, 0, 0.45);
-    color: #ffe1db;
+    border-radius: 6px;
+    background: var(--ui-danger-soft);
+    color: var(--ui-danger-text);
   }
 
   .marble-count {
-    color: #ececec;
+    color: var(--ui-muted);
     font-size: 10pt;
     font-variant-numeric: tabular-nums;
   }
@@ -421,13 +550,13 @@ div.copyright a {
     }
   }
 
-  // 고르지 않은 이름은 회색, 고른 이름은 파란 칩에 구슬 수와 −/+ 를 붙인다. 명단에 없는 이름은 점선
+  // 보관함 칩은 바탕색, 이번 추첨 칩은 강조색에 구슬 수와 −/+ 를 붙인다. 보관함에 없는 이름은 점선
   .chip {
     padding: 4px 12px;
-    border: 1px solid #9a9a9a;
+    border: 1px solid var(--ui-line);
     border-radius: 999px;
-    background: #6d6d6d;
-    color: #fefefe;
+    background: var(--ui-surface);
+    color: var(--ui-text);
     font-size: 10.5pt;
   }
 
@@ -436,17 +565,20 @@ div.copyright a {
     align-items: center;
     gap: 4px;
     padding: 2px 4px 2px 12px;
-    background: #00baff;
-    border-color: #00baff;
-    color: #111;
+    background: var(--ui-accent);
+    border-color: var(--ui-accent);
+    color: var(--ui-accent-text);
 
     &.extra {
-      border: 2px dashed #0a4f6b;
+      border: 2px dashed var(--ui-accent);
+      background: var(--ui-accent-soft);
+      color: var(--ui-text);
     }
   }
 
   .chip-name {
     padding: 2px 0;
+    border: none;
     background: none;
     color: inherit;
     font-weight: bold;
@@ -456,8 +588,9 @@ div.copyright a {
     width: 24px;
     height: 24px;
     padding: 0;
+    border: none;
     border-radius: 50%;
-    background: #0a4f6b;
+    background: var(--ui-accent-deep);
     color: #fff;
     font-size: 11pt;
   }
@@ -521,6 +654,7 @@ div.copyright a {
     flex: 1 1 auto;
     display: flex;
     min-width: 0;
+    border: 1px solid var(--ui-line);
     border-radius: 8px;
     overflow: hidden;
 
@@ -528,16 +662,20 @@ div.copyright a {
       flex: 1 1 0;
       min-width: 0;
       padding: 6px 4px;
+      border: none;
       border-radius: 0;
-      background: #8d8d8d;
+      background: var(--ui-surface);
+      color: var(--ui-muted);
     }
 
     button + button {
-      border-left: 1px solid #666;
+      border-left: 1px solid var(--ui-line);
     }
 
     button.active {
-      background: #2b2b2b;
+      background: var(--ui-accent);
+      color: var(--ui-accent-text);
+      font-weight: bold;
     }
   }
 
@@ -555,7 +693,7 @@ div.copyright a {
 
   .winner-summary {
     padding-left: calc(4.6em + 8px);
-    color: #ececec;
+    color: var(--ui-muted);
     font-size: 10pt;
   }
 
@@ -582,17 +720,17 @@ div.copyright a {
   .edit-note {
     flex: 1 0 100%;
     padding: 6px 8px;
-    border-radius: 5px;
+    border-radius: 6px;
   }
 
   .setup-error {
-    background: rgba(140, 0, 0, 0.45);
-    color: #ffe1db;
+    background: var(--ui-danger-soft);
+    color: var(--ui-danger-text);
   }
 
   .edit-note {
-    background: rgba(0, 186, 255, 0.2);
-    color: #fefefe;
+    background: var(--ui-accent-soft);
+    color: var(--ui-text);
   }
 
   // 만들기 전에 보는 확인 줄
@@ -636,7 +774,7 @@ div.copyright a {
 
   .net,
   .viewers {
-    color: #e2e2e2;
+    color: var(--ui-muted);
     font-size: 9.5pt;
     white-space: nowrap;
   }
@@ -651,16 +789,16 @@ div.copyright a {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #bbb;
+      background: var(--ui-muted);
     }
 
     &[data-state='online']::before,
     &[data-state='polling']::before {
-      background: #5ee36a;
+      background: var(--ui-ok);
     }
 
     &[data-state='reconnecting']::before {
-      background: #ffb347;
+      background: var(--ui-warn);
     }
   }
 
@@ -682,7 +820,7 @@ div.copyright a {
 
     // 링크를 Slack 에 올린 뒤: 안내를 초록으로, 복사 칸은 작게
     &.sent label {
-      color: #b9f5bf;
+      color: var(--ui-ok-text);
     }
 
     &.sent .copyline input {
@@ -699,6 +837,7 @@ div.copyright a {
 
   button.slack {
     background: #4a154b;
+    border-color: #4a154b;
     color: #fff;
   }
 
@@ -711,7 +850,6 @@ div.copyright a {
       min-width: 0;
       height: 32px;
       padding: 0 8px;
-      background: #eee;
       font-family: ui-monospace, Consolas, monospace;
       font-size: 9.5pt;
     }
@@ -731,21 +869,21 @@ div.copyright a {
 }
 
 // ---------------------------------------------------------------------------
-// Slack 알림 채널 추가 창
+// Slack 알림 채널 창
 // ---------------------------------------------------------------------------
 .dialog {
   width: min(460px, calc(100% - 32px));
   max-height: calc(100% - 32px);
   padding: 0;
-  border: none;
+  border: 1px solid var(--ui-panel-border);
   border-radius: 12px;
-  background: #5e5e5e;
-  color: #fefefe;
+  background: var(--ui-panel);
+  color: var(--ui-text);
   font-size: 10.5pt;
   line-height: 1.45;
   word-break: keep-all;
   overflow-wrap: anywhere;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--ui-shadow);
 
   &::backdrop {
     background: rgba(0, 0, 0, 0.55);
@@ -775,10 +913,10 @@ div.copyright a {
     align-items: center;
     justify-content: center;
     padding: 7px 14px;
-    border: none;
+    border: 1px solid var(--ui-line);
     border-radius: 6px;
-    background: #222;
-    color: #fefefe;
+    background: var(--ui-surface);
+    color: var(--ui-text);
     font: inherit;
     white-space: nowrap;
     cursor: pointer;
@@ -789,8 +927,9 @@ div.copyright a {
     }
 
     &.primary {
-      background: #00baff;
-      color: #111;
+      background: var(--ui-accent);
+      border-color: var(--ui-accent);
+      color: var(--ui-accent-text);
       font-weight: bold;
     }
   }
@@ -800,18 +939,17 @@ div.copyright a {
     height: 30px;
     padding: 0;
     border-radius: 50%;
-    background: rgba(0, 0, 0, 0.3);
   }
 
   :focus-visible {
-    outline: 2px solid #00baff;
+    outline: 2px solid var(--ui-accent);
     outline-offset: 2px;
   }
 
   .guide {
     padding: 8px 10px;
     border-radius: 8px;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--ui-sunken);
 
     summary {
       font-weight: bold;
@@ -826,7 +964,7 @@ div.copyright a {
     }
 
     a {
-      color: #9fdcff;
+      color: var(--ui-accent);
     }
   }
 
@@ -838,10 +976,10 @@ div.copyright a {
       width: 100%;
       height: 36px;
       padding: 0 10px;
-      border: 2px solid transparent;
+      border: 2px solid var(--ui-line);
       border-radius: 6px;
-      background: #eee;
-      color: #111;
+      background: var(--ui-field);
+      color: var(--ui-text);
       font: inherit;
     }
 
@@ -851,19 +989,19 @@ div.copyright a {
     }
 
     &.valid input {
-      border-color: #5ee36a;
+      border-color: var(--ui-ok);
     }
 
     &.invalid input {
-      border-color: #ff8a7a;
+      border-color: var(--ui-danger);
     }
 
     &.valid .field-help {
-      color: #b9f5bf;
+      color: var(--ui-ok-text);
     }
 
     &.invalid .field-help {
-      color: #ffd0c8;
+      color: var(--ui-danger-text);
     }
   }
 
@@ -891,7 +1029,7 @@ div.copyright a {
       gap: 8px;
       padding: 6px 8px;
       border-radius: 6px;
-      background: rgba(0, 0, 0, 0.2);
+      background: var(--ui-sunken);
     }
 
     .channel-name {
@@ -905,15 +1043,17 @@ div.copyright a {
     }
 
     button.confirming {
-      background: #b3261e;
+      background: var(--ui-danger);
+      border-color: var(--ui-danger);
+      color: #fff;
     }
   }
 
 
   .field-help {
     margin: 0;
-    color: #e2e2e2;
-    font-size: 9pt;
+    color: var(--ui-muted);
+    font-size: 9.5pt;
   }
 
   .dialog-status {
@@ -922,12 +1062,13 @@ div.copyright a {
     border-radius: 6px;
 
     &.ok {
-      background: rgba(46, 160, 67, 0.4);
+      background: var(--ui-ok-soft);
+      color: var(--ui-ok-text);
     }
 
     &.error {
-      background: rgba(140, 0, 0, 0.5);
-      color: #ffe1db;
+      background: var(--ui-danger-soft);
+      color: var(--ui-danger-text);
     }
   }
 
@@ -962,9 +1103,11 @@ div.copyright a {
     gap: 8px;
     width: min(420px, 100%);
     padding: 22px 28px;
+    border: 1px solid var(--ui-panel-border);
     border-radius: 16px;
-    background: rgba(20, 20, 20, 0.85);
-    color: #fefefe;
+    background: var(--ui-panel);
+    color: var(--ui-text);
+    box-shadow: var(--ui-shadow);
     text-align: center;
     word-break: keep-all;
     overflow-wrap: anywhere;
@@ -975,7 +1118,7 @@ div.copyright a {
   }
 
   .overlay-eyebrow {
-    color: #bbb;
+    color: var(--ui-muted);
     font-size: 10pt;
     letter-spacing: 0.1em;
   }
@@ -1002,27 +1145,18 @@ div.copyright a {
     .btn {
       padding: 7px 14px;
       border: none;
-      border-radius: 5px;
-      background: #00baff;
-      color: #111;
+      border-radius: 6px;
+      background: var(--ui-accent);
+      color: var(--ui-accent-text);
       font: inherit;
       text-decoration: none;
       cursor: pointer;
     }
 
     .btn {
-      background: #444;
-      color: #fefefe;
+      background: var(--ui-surface);
+      color: var(--ui-text);
     }
-  }
-}
-
-:root.light .overlay .overlay-card {
-  background: rgba(255, 255, 255, 0.92);
-  color: #222;
-
-  .overlay-eyebrow {
-    color: #666;
   }
 }
 
@@ -1033,9 +1167,11 @@ div.toast {
   z-index: 1000;
   max-width: calc(100% - 32px);
   padding: 8px 12px;
+  border: 1px solid var(--ui-panel-border);
   border-radius: 6px;
-  background: #ccc;
-  color: #111;
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  box-shadow: var(--ui-shadow);
   word-break: keep-all;
   overflow-wrap: anywhere;
   transform: translate(-50%, 0);
@@ -1109,6 +1245,10 @@ div.toast {
       min-height: 34px;
     }
 
+    .chip-keep {
+      min-height: 34px;
+    }
+
     .step-btn,
     .panel-corner {
       width: 40px;
@@ -1154,8 +1294,8 @@ div.toast {
       z-index: 1;
       margin: 0 -10px -10px;
       padding: 10px;
-      background: #555;
-      box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.3);
+      background: var(--ui-panel);
+      border-top: 1px solid var(--ui-panel-border);
     }
 
     .btn-toggle-settings {

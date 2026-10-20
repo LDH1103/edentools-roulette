@@ -31,11 +31,11 @@
 
   <section class="names" aria-labelledby="namesTitle">
     <div class="names-head">
-      <h3 id="namesTitle"><span class="step" aria-hidden="true">1</span>참가자</h3>
+      <h3 id="namesTitle"><span class="step" aria-hidden="true">1</span>참가자 <span class="sub">이번 추첨</span></h3>
       <span class="marble-count" id="marbleCount"></span>
     </div>
-    <div class="chips" id="rosterChips" aria-label="참가자 고르기"></div>
-    <p class="hint" id="rosterEmpty">자주 쓰는 이름을 "명단 편집"에 저장해 두면 눌러서 넣고 뺄 수 있습니다.</p>
+    <div class="chips" id="pickedChips" aria-label="이번 추첨 참가자"></div>
+    <p class="hint" id="pickedEmpty">아래 이름 보관함에서 이름을 누르거나, 이름을 추가하세요.</p>
     <form class="add-name" id="addNameForm" novalidate>
       <input type="text" id="in_addName" maxlength="200" placeholder="이름 추가, 쉼표로 여러 명" autocomplete="off" enterkeyhint="done" aria-label="참가자 이름 추가" />
       <button type="submit" id="btnAddName">추가</button>
@@ -47,26 +47,36 @@
         <output id="perPerson" aria-live="polite">1</output>
         <button type="button" class="step-btn" id="btnPerPlus" aria-label="한 사람당 구슬 하나 늘리기">+</button>
       </span>
-      <span class="roster-actions">
-        <button type="button" class="small" id="rosterAll">전체 추가</button>
-        <button type="button" class="small" id="rosterNone">전체 빼기</button>
-        <button type="button" class="small" id="rosterToggleEdit" aria-expanded="false" aria-controls="rosterEditor">명단 편집</button>
-      </span>
-    </div>
-    <div class="roster-editor" id="rosterEditor" hidden>
-      <textarea id="rosterEdit" rows="3" spellcheck="false" placeholder="한 줄에 한 명씩" aria-label="저장할 명단"></textarea>
-      <div class="row-buttons">
-        <button type="button" class="small" id="rosterSave">명단 저장</button>
-        <button type="button" class="small" id="rosterFromNames">지금 참가자 가져오기</button>
-        <span class="hint">서버에 저장되어 같이 씁니다.</span>
-      </div>
+      <button type="button" class="small" id="btnClearPicked">모두 빼기</button>
     </div>
     <details class="direct-input" id="directInput">
-      <summary>직접 입력</summary>
-      <p class="hint">쉼표나 줄바꿈으로 구분합니다. <code>이름*2</code>는 구슬 2개, <code>이름/3</code>은 가중치 3입니다.</p>
-      <textarea id="in_names" rows="4" spellcheck="false" placeholder="홍길동&#10;김철수*2&#10;이영희/3" aria-label="참가자 직접 입력"></textarea>
+      <summary>이번 참가자 직접 고치기</summary>
+      <p class="hint">이번 추첨에만 쓰입니다. 쉼표나 줄바꿈으로 구분하고, <code>이름*2</code>는 구슬 2개, <code>이름/3</code>은 가중치 3입니다.</p>
+      <textarea id="in_names" rows="4" spellcheck="false" placeholder="홍길동&#10;김철수*2&#10;이영희/3" aria-label="이번 참가자 직접 고치기"></textarea>
     </details>
     <p class="field-error" id="namesError" role="alert" hidden></p>
+
+    <div class="vault" role="region" aria-labelledby="vaultTitle">
+      <div class="vault-head">
+        <span class="vault-title" id="vaultTitle"><span aria-hidden="true">📁</span> 이름 보관함</span>
+        <span class="vault-note">서버에 저장됨 · 모두 같이 씀</span>
+        <span class="roster-actions">
+          <button type="button" class="small" id="rosterAll">전체 넣기</button>
+          <button type="button" class="small" id="rosterToggleEdit" aria-expanded="false" aria-controls="rosterEditor">보관함 편집</button>
+        </span>
+      </div>
+      <div class="vault-groups" id="rosterChips"></div>
+      <p class="hint" id="rosterEmpty">자주 쓰는 이름을 "보관함 편집"에 저장해 두면 눌러서 넣을 수 있습니다. 팀별로 묶을 수도 있습니다.</p>
+      <p class="hint" id="rosterAllIn" hidden>보관함의 이름이 모두 이번 추첨에 들어 있습니다.</p>
+      <div class="roster-editor" id="rosterEditor" hidden>
+        <textarea id="rosterEdit" rows="6" spellcheck="false" placeholder="[개발팀]&#10;김민준&#10;이서연&#10;[디자인팀]&#10;박지호" aria-label="이름 보관함 편집"></textarea>
+        <p class="hint">한 줄에 한 명씩 적습니다. <code>[그룹 이름]</code> 줄 아래 이름은 그 그룹으로 묶이고, 한 사람이 여러 그룹에 있어도 됩니다.</p>
+        <div class="row-buttons">
+          <button type="button" class="small" id="rosterSave">보관함 저장</button>
+          <button type="button" class="small" id="rosterFromNames">이번 참가자를 보관함에 넣기</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="options" aria-label="맵, 당첨, 알림">
