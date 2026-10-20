@@ -162,11 +162,20 @@ export class RoomClient {
 
   /** 주최자 동작은 HTTP 로 보낸다. WebSocket 이 막힌 환경에서도 시작할 수 있다 */
   async action(kind: 'start' | 'reset', key: string): Promise<void> {
+    await this.post(kind, { key });
+  }
+
+  /** 같은 링크에서 설정을 바꾼다. 서버가 새 시드로 대기 상태를 만들어 모두에게 알린다 */
+  async updateConfig(key: string, config: RoomConfig): Promise<void> {
+    await this.post('config', { key, config });
+  }
+
+  private async post(path: 'start' | 'reset' | 'config', payload: object): Promise<void> {
     const t0 = Date.now();
-    const res = await fetch(`${this.roomUrl}/${kind}`, {
+    const res = await fetch(`${this.roomUrl}/${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ key }),
+      body: JSON.stringify(payload),
     });
     const t1 = Date.now();
     if (!res.ok) return failFrom(res);

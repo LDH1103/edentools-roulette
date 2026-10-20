@@ -6,7 +6,7 @@ import { DurableObject } from 'cloudflare:workers';
 type WinnerSetting = { type: 'first' | 'last' | 'custom' | 'multi'; start: number; end: number };
 type RoomConfig = { names: string[]; map: number; winner: WinnerSetting; useSkills: boolean };
 type RoomState = RoomConfig & { id: string; seed: string; startAt: number | null; round: number };
-type HostAction = 'start' | 'reset';
+type HostAction = 'start' | 'reset' | 'config';
 type ActionResult = { ok: true; state: RoomState } | { ok: false; status: number; message: string };
 
 type Env = {
@@ -112,8 +112,8 @@ export class Room extends DurableObject<Env> {
     return { t: 'state', room: state, serverNow: Date.now(), count: this.viewerCount() };
   }
 
-  /** 주최자 동작. WebSocket 과 HTTP 가 같은 규칙을 쓴다 */
-  private async applyAction(kind: HostAction, key: unknown): Promise<ActionResult> {
+  /** 주최자 동작. WebSocket 과 HTTP 가 같은 규칙을 쓴다. config 는 검증을 마친 새 설정 */
+  private async applyAction(kind: HostAction, key: unknown, config?: RoomConfig): Promise<ActionResult> {
     const loaded = await this.load();
     if (!loaded) return { ok: false, status: 404, message: '방이 만료됐습니다' };
     // 주최자 확인: 방을 만들 때 받은 키가 있어야 시작·다시 추첨을 할 수 있다
@@ -128,6 +128,14 @@ export class Room extends DurableObject<Env> {
         state.startAt = Date.now() + COUNTDOWN_MS;
         break;
       case 'reset':
+        state.seed = randomToken(8);
+        state.startAt = null;
+        state.round += 1;
+        break;
+      case 'config':
+        // 설정을 바꾸면 같은 링크에서 새 라운드로 대기한다. 진행 중이던 레이스는 버린다
+        if (!config) return { ok: false, status: 400, message: '설정이 없습니다' };
+        Object.assign(state, config);
         state.seed = randomToken(8);
         state.startAt = null;
         state.round += 1;
@@ -158,9 +166,15 @@ export class Room extends DurableObject<Env> {
       return json({ id, hostKey, state });
     }
 
-    if (request.method === 'POST' && (action === 'start' || action === 'reset')) {
-      const body = (await request.json().catch(() => ({}))) as { key?: unknown };
-      const result = await this.applyAction(action, body.key);
+    if (request.method === 'POST' && (action === 'start' || action === 'reset' || action === 'config')) {
+      const body = (await request.json().catch(() => ({}))) as { key?: unknown; config?: unknown };
+      let config: RoomConfig | undefined;
+      if (action === 'config') {
+        const checked = validateConfig(body.config);
+        if (typeof checked === 'string') return json({ error: checked }, 400);
+        config = checked;
+      }
+      const result = await this.applyAction(action, body.key, config);
       if (!result.ok) return json({ error: result.message }, result.status);
       return json({ room: result.state, serverNow: Date.now(), count: this.viewerCount() });
     }
@@ -266,13 +280,13 @@ export default {
       return json({ error: '방 아이디 생성 실패' }, 500, cors);
     }
 
-    // GET /rooms/:id , GET /rooms/:id/ws , POST /rooms/:id/start , POST /rooms/:id/reset
+    // GET /rooms/:id , GET /rooms/:id/ws , POST /rooms/:id/start|reset|config
     if (parts.length >= 2 && parts.length <= 3) {
       const id = parts[1].toUpperCase();
       const action = parts[2] ?? '';
       const routeOk =
         (request.method === 'GET' && (action === '' || action === 'ws')) ||
-        (request.method === 'POST' && (action === 'start' || action === 'reset'));
+        (request.method === 'POST' && (action === 'start' || action === 'reset' || action === 'config'));
       if (!routeOk || !/^[A-Z2-9]{6}$/.test(id)) return json({ error: 'not found' }, 404, cors);
       const stub = env.ROOM.get(env.ROOM.idFromName(id));
       const res = await stub.fetch(`https://room/${action}`, request);

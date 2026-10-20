@@ -466,15 +466,25 @@ div.copyright a {
     gap: 6px;
   }
 
-  .setup-error {
+  .setup-error,
+  .edit-note {
     flex: 1 0 100%;
     padding: 6px 8px;
     border-radius: 5px;
+  }
+
+  .setup-error {
     background: rgba(140, 0, 0, 0.45);
     color: #ffe1db;
   }
 
-  #btnCreateRoom {
+  .edit-note {
+    background: rgba(0, 186, 255, 0.2);
+    color: #fefefe;
+  }
+
+  #btnCreateRoom,
+  #btnEditSave {
     padding: 7px 16px;
   }
 }
@@ -749,7 +759,8 @@ div.toast {
       padding-left: 0;
     }
 
-    #btnCreateRoom {
+    #btnCreateRoom,
+    #btnEditSave {
       order: 10;
       flex: 1 0 100%;
       padding: 10px;

@@ -698,6 +698,8 @@ export class Roulette extends EventTarget {
     this._rankKeys = new Map();
     this._tick = 0;
     this._startAt = null;
+    // 카운트다운 중에 다시 놓으면 예약된 출발도 취소한다. 안 그러면 새 구슬로 그대로 출발한다
+    this._pendingStartAt = null;
     this._localElapsed = 0;
     this._isRunning = false;
     this._catchingUp = false;

@@ -23,8 +23,17 @@ export class Box2dPhysics implements IPhysics {
     console.log('box2d ready');
   }
 
+  /**
+   * 월드를 통째로 새로 만든다. 같은 월드에서 바디를 지웠다 다시 만들면 broadphase proxy 번호가
+   * 이전 기록(골인해서 빠진 구슬, 부서진 장애물)에 따라 달라지고, 충돌을 그 번호 순서로 처리하므로
+   * 같은 시드라도 결과가 어긋난다. 라운드마다 빈 월드에서 같은 순서로 만들어야 누구 화면에서나 같다
+   */
   clear(): void {
-    this.clearEntities();
+    this.Box2D.destroy(this.world);
+    this.world = new this.Box2D.b2World(this.gravity);
+    this.marbleMap = {};
+    this.entities = [];
+    this.deleteCandidates = [];
   }
 
   clearMarbles(): void {
@@ -94,13 +103,6 @@ export class Box2dPhysics implements IPhysics {
         life: entity.props.life ?? -1,
       });
     });
-  }
-
-  clearEntities() {
-    this.entities.forEach((entity) => {
-      this.world.DestroyBody(entity.body);
-    });
-    this.entities = [];
   }
 
   createMarble(id: number, x: number, y: number): void {

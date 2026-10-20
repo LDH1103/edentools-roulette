@@ -88,18 +88,21 @@
       <p class="winner-summary" id="winnerSummary"></p>
       <div class="opt-row opt-toggles">
         <label class="toggle" for="chkSkill"><i class="icon bomb" aria-hidden="true"></i>스킬 <input type="checkbox" class="switch" id="chkSkill" checked /></label>
-        <label class="toggle" for="chkAutoRecording"><i class="icon record" aria-hidden="true"></i>녹화 <input type="checkbox" class="switch" id="chkAutoRecording" /></label>
+        <label class="toggle" id="setupRecordWrap" for="chkAutoRecording"><i class="icon record" aria-hidden="true"></i>녹화 <input type="checkbox" class="switch" id="chkAutoRecording" /></label>
         <button type="button" class="btn-theme" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
       </div>
     </div>
   </section>
 
   <div class="actions">
+    <p class="edit-note" id="editNote" hidden>설정을 고치는 중입니다. 저장하면 같은 링크에서 새 시드로 대기 상태가 되고, 보는 사람 화면에도 바로 적용됩니다.</p>
     <p class="setup-error" id="setupError" role="alert" hidden></p>
     <button id="btnShuffle" type="button"><i class="icon shuffle" aria-hidden="true"></i>섞기</button>
     <span class="sep"></span>
     <button id="btnLocal" type="button"><i class="icon play" aria-hidden="true"></i>혼자 돌리기</button>
     <button id="btnCreateRoom" class="primary" type="button">공유 링크 만들기</button>
+    <button id="btnEditCancel" type="button" hidden>취소</button>
+    <button id="btnEditSave" class="primary" type="button" hidden>변경 저장</button>
   </div>
 </div>
 
@@ -129,6 +132,7 @@
     <span class="sep"></span>
     <button type="button" class="small" id="btnCopyLinkSmall">링크 복사</button>
     <a id="lnkNewRoom" class="btn small" href="./">새 추첨</a>
+    <button type="button" id="btnHostEdit" hidden>설정 수정</button>
     <button type="button" id="btnHostReset" hidden>다시 추첨</button>
     <button type="button" id="btnHostStart" class="primary" hidden>▶ 시작</button>
   </div>

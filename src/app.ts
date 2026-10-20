@@ -202,10 +202,34 @@ export function initApp(roulette: Roulette): void {
 }
 
 // ---------------------------------------------------------------------------
-// 설정 모드
+// 설정 폼: 처음 링크를 만들 때와 방에서 설정을 고칠 때 같이 쓴다
 // ---------------------------------------------------------------------------
-function setupMode(roulette: Roulette): void {
-  const settings = $('#settings');
+type EditHandlers = {
+  save: (config: RoomConfig) => Promise<void>;
+  cancel: () => void;
+};
+
+type SettingsForm = {
+  getConfig: () => RoomConfig;
+  getNames: () => string[];
+  showError: (msg: string | null) => void;
+  /** 입력값으로 당첨 범위를 다시 계산해 구슬에 반영한다 */
+  applyWinner: () => void;
+  /** 방 설정을 폼에 채우고 미리보기 구슬을 놓는다 */
+  load: (config: RoomConfig) => void;
+  /** setup: 혼자 돌리기·공유 링크 만들기, edit: 취소·변경 저장 */
+  setMode: (mode: 'setup' | 'edit', handlers?: EditHandlers) => void;
+};
+
+let settingsForm: SettingsForm | null = null;
+
+/** 폼은 이벤트를 한 번만 걸어야 하므로 처음 필요할 때 한 번 만든다 */
+function getSettingsForm(roulette: Roulette): SettingsForm {
+  settingsForm ??= initSettingsForm(roulette);
+  return settingsForm;
+}
+
+function initSettingsForm(roulette: Roulette): SettingsForm {
   const namesInput = $<HTMLTextAreaElement>('#in_names');
   const winCount = $<HTMLInputElement>('#in_winCount');
   const rangeStart = $<HTMLInputElement>('#in_rangeStart');
@@ -214,8 +238,6 @@ function setupMode(roulette: Roulette): void {
   const chkRecording = $<HTMLInputElement>('#chkAutoRecording');
   const errorEl = $('#setupError');
   const countEl = $('#marbleCount');
-
-  settings.hidden = false;
 
   let winner: WinnerSetting = { type: 'first', start: 1, end: 1 };
   try {
@@ -417,7 +439,6 @@ function setupMode(roulette: Roulette): void {
     options.useSkills = chkSkill.checked;
   });
   chkRecording.checked = false;
-  roulette.setAutoRecording(false);
   chkRecording.addEventListener('change', () => roulette.setAutoRecording(chkRecording.checked));
 
   // 좁은 화면에서는 설정을 접어 둔다 (넓은 화면에서는 버튼이 숨고 항상 펼쳐져 있다)
@@ -432,11 +453,82 @@ function setupMode(roulette: Roulette): void {
   // ----- 맵 -----
   initMapSelector(roulette, getReady);
 
-  // ----- 섞기 / 혼자 돌리기 / 공유 링크 -----
+  // ----- 섞기 (미리보기 배치만 바뀐다) -----
   $('#btnShuffle').addEventListener('click', () => {
     previewSeed = newSeed();
     getReady();
   });
+
+  // ----- 방에서 설정 수정 -----
+  let editHandlers: EditHandlers | null = null;
+  const editSave = $<HTMLButtonElement>('#btnEditSave');
+  $('#btnEditCancel').addEventListener('click', () => editHandlers?.cancel());
+  editSave.addEventListener('click', async () => {
+    if (!editHandlers) return;
+    if (roulette.getCount() < 2) {
+      showError('참가자를 2명 이상 입력하세요.');
+      return;
+    }
+    showError(null);
+    editSave.disabled = true;
+    editSave.textContent = '저장 중…';
+    try {
+      await editHandlers.save(getConfig());
+    } catch (e) {
+      showError(`저장하지 못했습니다. ${friendlyError(e)}`);
+    } finally {
+      editSave.disabled = false;
+      editSave.textContent = '변경 저장';
+    }
+  });
+
+  function getConfig(): RoomConfig {
+    return {
+      names: getNames(),
+      map: roulette.getCurrentMap()?.index ?? 0,
+      winner: readWinner(),
+      useSkills: options.useSkills,
+    };
+  }
+
+  function load(config: RoomConfig) {
+    namesInput.value = config.names.join('\n');
+    namesInput.scrollTop = 0;
+    $<HTMLSelectElement>('#sltMap').value = String(config.map);
+    roulette.setMap(config.map);
+    options.useSkills = config.useSkills;
+    chkSkill.checked = config.useSkills;
+    winner = normalizeWinner(config.winner);
+    renderWinnerInputs();
+    getReady();
+    showError(null);
+  }
+
+  function setMode(mode: 'setup' | 'edit', handlers?: EditHandlers) {
+    const editing = mode === 'edit';
+    editHandlers = editing ? (handlers ?? null) : null;
+    $('#btnLocal').hidden = editing;
+    $('#btnCreateRoom').hidden = editing;
+    $('#btnEditCancel').hidden = !editing;
+    editSave.hidden = !editing;
+    $('#editNote').hidden = !editing;
+    // 방에서는 녹화를 방 카드의 "내 화면 녹화"로 켠다
+    $('#setupRecordWrap').hidden = editing;
+  }
+
+  getReady();
+  return { getConfig, getNames, showError, applyWinner: () => applyWinner(), load, setMode };
+}
+
+// ---------------------------------------------------------------------------
+// 설정 모드
+// ---------------------------------------------------------------------------
+function setupMode(roulette: Roulette): void {
+  const settings = $('#settings');
+  const form = getSettingsForm(roulette);
+  form.setMode('setup');
+  roulette.setAutoRecording(false);
+  settings.hidden = false;
 
   const onGoal = (e: Event) => {
     const detail = (e as CustomEvent<{ winners: string[] }>).detail;
@@ -449,12 +541,12 @@ function setupMode(roulette: Roulette): void {
 
   $('#btnLocal').addEventListener('click', () => {
     if (roulette.getCount() < 2) {
-      showError('참가자를 2명 이상 입력하세요.');
+      form.showError('참가자를 2명 이상 입력하세요.');
       return;
     }
-    showError(null);
-    roulette.setMarbles(getNames(), newSeed());
-    applyWinner();
+    form.showError(null);
+    roulette.setMarbles(form.getNames(), newSeed());
+    form.applyWinner();
     settings.classList.add('hide');
     roulette.start();
   });
@@ -462,16 +554,11 @@ function setupMode(roulette: Roulette): void {
   const createBtn = $<HTMLButtonElement>('#btnCreateRoom');
   createBtn.addEventListener('click', async () => {
     if (roulette.getCount() < 2) {
-      showError('참가자를 2명 이상 입력하세요.');
+      form.showError('참가자를 2명 이상 입력하세요.');
       return;
     }
-    showError(null);
-    const config: RoomConfig = {
-      names: getNames(),
-      map: roulette.getCurrentMap()?.index ?? 0,
-      winner: readWinner(),
-      useSkills: options.useSkills,
-    };
+    form.showError(null);
+    const config = form.getConfig();
     createBtn.disabled = true;
     createBtn.textContent = '링크 만드는 중…';
     try {
@@ -482,13 +569,11 @@ function setupMode(roulette: Roulette): void {
       history.pushState(null, '', `#${id}`);
       void enterRoom(roulette, id, hostKey);
     } catch (e) {
-      showError(`링크를 만들지 못했습니다. ${friendlyError(e)}`);
+      form.showError(`링크를 만들지 못했습니다. ${friendlyError(e)}`);
       createBtn.disabled = false;
       createBtn.textContent = '공유 링크 만들기';
     }
   });
-
-  getReady();
 }
 
 // ---------------------------------------------------------------------------
@@ -553,20 +638,22 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     ].join('\n');
   }
 
+  /** 새 라운드(처음, 다시 추첨, 설정 수정): 설정·시드로 구슬을 놓는다 */
+  function setupRound(s: RoomState) {
+    lastRound = s.round;
+    started = false;
+    resultShown = false;
+    window.clearTimeout(resultTimer);
+    options.useSkills = s.useSkills;
+    roulette.setMap(s.map);
+    roulette.setMarbles(s.names, s.seed);
+    applyWinnerSetting(roulette, s.winner);
+    const mapTitle = translate(roulette.getCurrentMap()?.title ?? '');
+    $('#roomSummary').textContent = `${roulette.getCount()}명 중 ${winnerShort(s.winner)} 당첨 · ${mapTitle}`;
+  }
+
   function applyState(s: RoomState) {
-    if (s.round !== lastRound) {
-      // 새 라운드(처음 또는 다시 추첨): 설정·시드로 구슬을 놓는다
-      lastRound = s.round;
-      started = false;
-      resultShown = false;
-      window.clearTimeout(resultTimer);
-      options.useSkills = s.useSkills;
-      roulette.setMap(s.map);
-      roulette.setMarbles(s.names, s.seed);
-      applyWinnerSetting(roulette, s.winner);
-      const mapTitle = translate(roulette.getCurrentMap()?.title ?? '');
-      $('#roomSummary').textContent = `${roulette.getCount()}명 중 ${winnerShort(s.winner)} 당첨 · ${mapTitle}`;
-    }
+    if (s.round !== lastRound) setupRound(s);
     if (s.startAt !== null && !started) {
       started = true;
       roulette.startSynced(s.startAt, () => client.serverNow());
@@ -588,6 +675,38 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
   const btnCopyLinkSmall = $('#btnCopyLinkSmall');
   const recordWrap = $('#roomRecordWrap');
   const noteEl = $('#roomNote');
+  const btnEdit = $<HTMLButtonElement>('#btnHostEdit');
+  const settingsEl = $('#settings');
+
+  // ----- 설정 수정: 같은 폼을 방 설정으로 채워 연다. 저장하면 서버가 새 라운드를 모두에게 보낸다 -----
+  function closeEditor() {
+    settingsEl.hidden = true;
+    panel.hidden = false;
+    render();
+  }
+  btnEdit.addEventListener('click', () => {
+    const s = client.state;
+    if (!s || !hostKey) return;
+    const form = getSettingsForm(roulette);
+    form.setMode('edit', {
+      save: async (config) => {
+        await client.updateConfig(hostKey, config);
+        closeEditor();
+        toast('설정을 바꿨습니다. 보는 사람 화면에도 바로 적용됩니다.', 3000);
+      },
+      cancel: () => {
+        closeEditor();
+        // 미리보기로 바뀐 구슬을 방 상태로 되돌린다. 결과가 나온 방이면 끝 장면까지 다시 따라잡는다
+        lastRound = -1;
+        if (client.state) applyState(client.state);
+      },
+    });
+    form.load(s);
+    panel.hidden = true;
+    overlay.hidden = true;
+    settingsEl.classList.remove('hide');
+    settingsEl.hidden = false;
+  });
 
   function render() {
     const s = client.state;
@@ -605,21 +724,27 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
       overlay.hidden = true;
     }
 
-    // 원작 설정창처럼 레이스 중에는 숨기고, 기다릴 때와 결과가 나온 뒤에만 보인다
-    panel.classList.toggle('hide', !(waiting || resultShown));
+    // 원작 설정창처럼 레이스 중에는 숨긴다. 카운트다운 중에는 주최자가 잘못 누른 시작을 멈출 수 있게 둔다
+    panel.classList.toggle('hide', !(waiting || countdown || resultShown));
     hostShare.hidden = !(isHost && waiting);
     btnCopyLinkSmall.hidden = isHost && waiting;
     recordWrap.hidden = !waiting;
     btnStart.hidden = !(isHost && waiting);
     btnReset.hidden = !(isHost && !waiting);
+    // 레이스 중에는 고치지 않는다. 기다릴 때와 결과가 나온 뒤에만 연다
+    btnEdit.hidden = !(isHost && (waiting || resultShown));
 
     let note = '';
     if (waiting) {
       note = isHost
         ? '보는 사람이 다 들어오지 않아도 시작할 수 있습니다. 늦게 들어온 사람도 같은 장면을 따라잡습니다.'
         : '링크를 열어 두기만 하면 됩니다. 주최자가 시작하면 모두 같이 출발합니다.';
+    } else if (countdown) {
+      note = isHost ? '곧 출발합니다. 잘못 눌렀다면 "다시 추첨"으로 멈출 수 있습니다.' : '곧 출발합니다.';
     } else if (resultShown) {
-      note = isHost ? '추첨이 끝났습니다. "다시 추첨"을 누르면 새 시드로 모두 다시 봅니다.' : '추첨이 끝났습니다.';
+      note = isHost
+        ? '추첨이 끝났습니다. "다시 추첨"은 같은 설정으로, "설정 수정"은 바꾼 설정으로 같은 링크에서 다시 돌립니다.'
+        : '추첨이 끝났습니다.';
     }
     noteEl.textContent = note;
   }
