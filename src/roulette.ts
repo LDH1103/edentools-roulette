@@ -80,6 +80,8 @@ export class Roulette extends EventTarget {
   private _isRunning: boolean = false;
   /** 진행 중에는 null, 당첨자가 모두 확정되면 당첨자 배열 */
   private _result: Marble[] | null = null;
+  /** 남은 구슬이 함께 당첨돼 서로의 등수가 없는 결과인지 */
+  private _resultTied = false;
 
   /** 골인한 구슬을 물리에서 빼는 예약 (틱 기준). 벽시계 타이머를 쓰면 보는 환경마다 결과가 달라진다 */
   private _pendingRemovals: { id: number; atTick: number }[] = [];
@@ -389,18 +391,32 @@ export class Roulette extends EventTarget {
   private _checkFinish() {
     if (!this._isRunning) return;
     const { start, end } = this._winnerRange;
+    const total = this._winners.length + this._marbles.length;
 
-    // 남은 구슬이 1개면 그 등수는 골인하지 않아도 확정된다. 2개 이상 남았다면 그들 사이의
-    // 순위는 물리로만 정해지므로 예측하지 않는다 (당첨 범위 안에서도 순위는 의미를 가진다)
-    const early = this._winners.length > 0 && this._marbles.length === 1;
-    const ranked = early ? [...this._winners, this._marbles[0]] : this._winners;
-    if (ranked.length <= end) return;
+    // 당첨 범위가 맨 뒤까지(뒤에서 N명, 끝 등수까지의 범위)면 앞사람이 모두 들어와 범위 인원만 남는 순간
+    // 당첨자가 정해진다. 남은 구슬끼리의 순서는 당첨과 상관없으므로 들어올 때까지 기다리지 않는다.
+    // 모두가 당첨인 범위(start 0)는 시작하자마자 끝나지 않도록 제외한다
+    const restAreWinners = start > 0 && end === total - 1 && this._winners.length === start && this._marbles.length > 0;
 
-    if (early && this._isWinningRank(this._winners.length)) {
+    let result: Marble[];
+    if (restAreWinners) {
+      result = [...this._marbles];
       this._particleManager.shot(this._renderer.width, this._renderer.height);
+    } else {
+      // 남은 구슬이 1개면 그 등수는 골인하지 않아도 확정된다. 2개 이상 남았다면 그들 사이의
+      // 순위는 물리로만 정해지므로 예측하지 않는다 (당첨 범위 안에서도 순위는 의미를 가진다)
+      const early = this._winners.length > 0 && this._marbles.length === 1;
+      const ranked = early ? [...this._winners, this._marbles[0]] : this._winners;
+      if (ranked.length <= end) return;
+      if (early && this._isWinningRank(this._winners.length)) {
+        this._particleManager.shot(this._renderer.width, this._renderer.height);
+      }
+      result = ranked.slice(start, end + 1);
     }
 
-    this._result = ranked.slice(start, end + 1);
+    this._result = result;
+    // 남은 사람이 함께 당첨되면 등수 대신 공동 표시를 쓴다
+    this._resultTied = restAreWinners && result.length > 1;
     this._isRunning = false;
     this.dispatchEvent(
       new CustomEvent('goal', {
@@ -414,6 +430,8 @@ export class Roulette extends EventTarget {
 
   private _calcTimeScale(): number {
     if (!this._stage) return 1;
+    // 당첨이 정해진 뒤에는 남은 구슬을 슬로모션으로 보여 줄 이유가 없다
+    if (this._result) return 1;
     const targetIndex = this._targetIndex;
     // 연출 구역: 커트라인 구슬이 구역 가운데로 갈수록 느려진다. 경쟁하는 구슬이 있을 때만
     if (this._zoomIntensity !== null) {
@@ -455,6 +473,7 @@ export class Roulette extends EventTarget {
       effects: this._effects,
       winnerRange: this._winnerRange,
       result: this._result,
+      resultTied: this._resultTied,
       size: { x: this._renderer.width, y: this._renderer.height },
       theme: this._theme,
     };
@@ -556,6 +575,7 @@ export class Roulette extends EventTarget {
     this._pendingRemovals = [];
     this.physics.clearMarbles();
     this._result = null;
+    this._resultTied = false;
     this._winners = [];
     this._marbles = [];
   }

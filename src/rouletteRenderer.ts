@@ -24,6 +24,8 @@ export type RenderParameters = {
   winnerRange: WinnerRange;
   /** 진행 중에는 null, 당첨자가 모두 확정되면 당첨자 배열 */
   result: Marble[] | null;
+  /** 남은 구슬이 함께 당첨돼 서로의 등수가 없는 결과. 등수 대신 ☆ 를 쓴다 */
+  resultTied: boolean;
   size: VectorLike;
   theme: ColorTheme;
 };
@@ -268,7 +270,7 @@ export class RouletteRenderer {
    * 우측은 랭킹 리스트가 구슬 수만큼 내려오므로 겹친다. 좌측은 미니맵이 세로로 긴
    * 스트립이라 그 오른쪽에 붙인다.
    */
-  private renderWinnerProgress({ winners, winnerRange, result, theme }: RenderParameters) {
+  private renderWinnerProgress({ winners, winnerRange, result, resultTied, theme }: RenderParameters) {
     const { start, end } = winnerRange;
     if (end <= start) return; // 1명 추첨은 기존 하단 Winner 표시를 쓴다
 
@@ -343,7 +345,7 @@ export class RouletteRenderer {
 
       ctx.font = rankFont;
       ctx.fillStyle = theme.winnerText;
-      ctx.fillText(`#${start + hidden + i + 1}`, panelX + pad, y);
+      ctx.fillText(resultTied ? '☆' : `#${start + hidden + i + 1}`, panelX + pad, y);
 
       ctx.font = nameFont;
       ctx.fillStyle = `hsl(${marble.hue} 100% ${theme.marbleLightness}%)`;
@@ -356,7 +358,7 @@ export class RouletteRenderer {
   }
 
   /** 당첨자가 여러명일 때 화면 중앙에 목록 팝업을 그린다 */
-  private renderWinnerList(winners: Marble[], { theme, winnerRange }: RenderParameters) {
+  private renderWinnerList(winners: Marble[], { theme, winnerRange, resultTied }: RenderParameters) {
     const ctx = this.ctx;
     const w = this._sceneCanvas.width;
     const h = this._sceneCanvas.height;
@@ -415,7 +417,7 @@ export class RouletteRenderer {
       ctx.textAlign = 'right';
       ctx.fillStyle = theme.winnerText;
       ctx.font = `${lineHeight * 0.6}px sans-serif`;
-      ctx.fillText(`#${winnerRange.start + i + 1}`, x + rankWidth * 0.8, y);
+      ctx.fillText(resultTied ? '☆' : `#${winnerRange.start + i + 1}`, x + rankWidth * 0.8, y);
 
       ctx.textAlign = 'left';
       ctx.fillStyle = `hsl(${marble.hue} 100% ${theme.marbleLightness}%)`;
