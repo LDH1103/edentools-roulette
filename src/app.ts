@@ -425,16 +425,24 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
 
   // ----- 이번 추첨 칩과 이름 보관함 -----
   // 위: 이번 추첨 참가자. 이름을 누르면 빼고, −/+ 로 구슬 수를 바꾼다. 보관함에 없는 이름은 점선에 "보관"(그룹 고르기)
-  // 아래: 이름 보관함(서버 공용). 평소에는 아직 안 넣은 이름만 그룹별로 보여 주고, 누르면 위로 들어간다.
-  //       "보관함 편집"을 누르면 그 자리에서 그룹 이름·이름을 고치고 옮긴다. 글로 한꺼번에 고칠 수도 있다
+  // 아래: 이름 보관함(서버 공용). 아직 안 넣은 이름만 그룹별로 보여 주고, 누르면 위로 들어간다.
+  // 보관함 고치기는 "이름 보관함 관리" 창에서 한다: 이름 추가(그룹 고르기), 칩 골라 옮기기·끌어다 놓기,
+  // 그룹 이름 바꾸기(연필)·삭제(휴지통), 글로 한 번에 고치기
   const pickedChips = $('#pickedChips');
   const vaultGroups = $('#rosterChips');
+  const vaultDialog = $<HTMLDialogElement>('#vaultDialog');
+  const vaultManage = $('#vaultManage');
+  const vaultAddName = $<HTMLInputElement>('#vaultAddName');
+  const vaultAddGroup = $<HTMLSelectElement>('#vaultAddGroup');
+  const vaultMoveTo = $<HTMLSelectElement>('#vaultMoveTo');
   const rosterEdit = $<HTMLTextAreaElement>('#rosterEdit');
   const rosterEditor = $('#rosterEditor');
-  const rosterToggle = $('#rosterToggleEdit');
   const rosterTextBtn = $('#btnRosterText');
   /** 보관함은 줄 목록으로 저장한다. "[그룹 이름]" 줄 아래 이름이 그 그룹이고, 그 앞의 이름은 그룹 없음 */
   const GROUP_LINE = /^\[(.+)\]$/;
+  /** 그룹 머리의 아이콘: 연필(이름 바꾸기), 휴지통(삭제) */
+  const ICON_EDIT = '✎';
+  const ICON_DELETE = '\u{1F5D1}';
   let roster: string[] = [];
   try {
     const v = JSON.parse(prefGet(ROSTER_KEY) ?? '[]');
@@ -442,12 +450,15 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   } catch {
     roster = [];
   }
-  /** 보관함 편집 모드인지 */
-  let vaultEditing = false;
-  /** 다시 그린 뒤 초점을 둘 칸: 그룹 번호와 칸 종류 */
-  let focusAfterRender: { group: number; field: 'title' | 'add' } | null = null;
+  /** 관리 창에서 고른 칩. "그룹번호:이름" */
+  let selected = new Set<string>();
+  /** 관리 창에서 이름을 바꾸는 중인 그룹 번호 */
+  let renaming: number | null = null;
+  /** 이름 추가 줄에서 마지막으로 고른 그룹 번호 */
+  let addTarget: number | null = null;
 
   type RosterGroup = { title: string | null; names: string[] };
+  type Choice = { label: string; value: number };
 
   /** 보관함을 그룹 목록으로. 0번은 그룹 없음(title null)이고 비어 있을 수 있다 */
   function rosterModel(): RosterGroup[] {
@@ -470,6 +481,10 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     saveRoster(lines);
   }
 
+  /** 그룹 선택지: 그룹 없음과 이름 있는 그룹들 */
+  const groupChoices = (groups: RosterGroup[]): Choice[] =>
+    groups.map((g, i) => ({ label: g.title ?? '그룹 없음', value: i }));
+
   /** 그룹 이름 정리: 대괄호는 그룹 줄 표시와 겹치므로 뺀다 */
   const cleanTitle = (raw: string) => raw.replace(/[[\]]/g, '').trim().slice(0, 38);
 
@@ -477,7 +492,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   const rosterNames = () => [...new Set(roster.filter((line) => !GROUP_LINE.test(line)))];
 
   /**
-   * 편집 칸 글을 저장할 줄 목록으로 바꾼다. "[그룹 이름]" 줄 다음에 이름을 쉼표나 줄바꿈으로 적는다.
+   * 글 칸을 저장할 줄 목록으로 바꾼다. "[그룹 이름]" 줄 다음에 이름을 쉼표나 줄바꿈으로 적는다.
    * "[개발팀] A, B" 처럼 그룹 줄 뒤에 이어 적어도 된다
    */
   function parseRosterText(text: string): string[] {
@@ -491,7 +506,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     return lines;
   }
 
-  /** 편집 칸에 보일 글: 그룹 줄 다음 줄에 그 그룹 이름들을 쉼표로 잇는다 */
+  /** 글 칸에 보일 글: 그룹 줄 다음 줄에 그 그룹 이름들을 쉼표로 잇는다 */
   function rosterEditorText(): string {
     const out: string[] = [];
     let names: string[] = [];
@@ -564,18 +579,11 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     return b;
   }
 
-  /** 고르는 목록. 첫 줄은 안내 문구라 고를 수 없다 */
-  function pickList(
-    className: string,
-    placeholder: string,
-    choices: { label: string; value: number }[]
-  ): HTMLSelectElement {
-    const select = document.createElement('select');
-    select.className = className;
+  /** 목록을 안내 문구(고를 수 없음)와 선택지로 채운다 */
+  function fillChoices(select: HTMLSelectElement, placeholder: string, choices: Choice[]) {
     const first = new Option(placeholder, '', true, true);
     first.disabled = true;
-    select.append(first, ...choices.map((c) => new Option(c.label, String(c.value))));
-    return select;
+    select.replaceChildren(first, ...choices.map((c) => new Option(c.label, String(c.value))));
   }
 
   /** "보관": 그룹을 만들었으면 넣을 그룹을 고르는 목록, 아니면 버튼 */
@@ -590,11 +598,9 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
       keep.setAttribute('aria-label', `${name} 이름 보관함에 저장`);
       return keep;
     }
-    const select = pickList(
-      'chip-keep',
-      '보관',
-      groups.map((g, i) => ({ label: g.title ?? '그룹 없음', value: i }))
-    );
+    const select = document.createElement('select');
+    select.className = 'chip-keep';
+    fillChoices(select, '보관', groupChoices(groups));
     select.setAttribute('aria-label', `${name} 이름을 보관할 그룹`);
     select.addEventListener('change', () => {
       const index = Number(select.value);
@@ -605,22 +611,22 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   }
 
   /** 이번 추첨 칩: 이름(누르면 빼기), −, 구슬 수, +. 보관함에 없는 이름이면 "보관" */
-  function pickedChip(name: string, key: string, count: number, inRoster: boolean): HTMLElement {
+  function pickedChip(name: string, entryKey: string, count: number, inRoster: boolean): HTMLElement {
     const chip = document.createElement('span');
     chip.className = inRoster ? 'chip on' : 'chip on extra';
     chip.dataset.name = name;
     chip.setAttribute('role', 'group');
     chip.setAttribute('aria-label', `${name} 구슬 ${count}개`);
     if (!inRoster) chip.title = '이름 보관함에 없는 이름';
-    const nameBtn = chipButton(key, 'chip-name', () => changeCount(key, -count));
+    const nameBtn = chipButton(entryKey, 'chip-name', () => changeCount(entryKey, -count));
     nameBtn.setAttribute('aria-pressed', 'true');
     nameBtn.title = `${name} 빼기`;
-    const minus = chipButton('−', 'chip-step', () => changeCount(key, -1));
+    const minus = chipButton('−', 'chip-step', () => changeCount(entryKey, -1));
     minus.setAttribute('aria-label', `${name} 구슬 하나 빼기`);
     const countText = document.createElement('span');
     countText.className = 'chip-count';
     countText.textContent = String(count);
-    const plus = chipButton('+', 'chip-step', () => changeCount(key, 1));
+    const plus = chipButton('+', 'chip-step', () => changeCount(entryKey, 1));
     plus.setAttribute('aria-label', `${name} 구슬 하나 더`);
     chip.append(nameBtn, minus, countText, plus);
     if (!inRoster) chip.append(keepControl(name));
@@ -661,117 +667,177 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     return block;
   }
 
-  /** 편집 모드의 칩: 이름, 다른 그룹으로 옮기기, ×. 컴퓨터에서는 끌어다 다른 그룹에 놓을 수 있다 */
-  function editChip(groups: RosterGroup[], index: number, name: string): HTMLElement {
+  // ----- 이름 보관함 관리 창 -----
+
+  /** 관리 창의 칩: 이름(누르면 고르기)과 ×. 끌어다 다른 그룹에 놓을 수 있다 */
+  function manageChip(index: number, name: string): HTMLElement {
+    const chipId = `${index}:${name}`;
+    const isSelected = selected.has(chipId);
     const chip = document.createElement('span');
-    chip.className = 'chip edit-chip';
+    chip.className = isSelected ? 'chip vchip selected' : 'chip vchip';
     chip.dataset.name = name;
     chip.draggable = true;
-    chip.addEventListener('dragstart', (e) =>
-      e.dataTransfer?.setData('text/plain', JSON.stringify({ name, from: index }))
-    );
-    const label = document.createElement('span');
-    label.textContent = name;
-    chip.append(label);
-    const others = groups
-      .map((g, i) => ({ label: g.title ?? '그룹 없음', value: i }))
-      .filter((choice) => choice.value !== index);
-    if (others.length > 0) {
-      const move = pickList('chip-move', '옮기기', others);
-      move.setAttribute('aria-label', `${name} 다른 그룹으로 옮기기`);
-      move.addEventListener('change', () => moveName(index, name, Number(move.value)));
-      chip.append(move);
-    }
+    chip.addEventListener('dragstart', (e) => e.dataTransfer?.setData('text/plain', chipId));
+    const nameBtn = chipButton(name, 'vchip-name', () => toggleSelected(chipId));
+    nameBtn.setAttribute('aria-pressed', String(isSelected));
     const del = chipButton('×', 'chip-del', () => removeName(index, name));
     del.setAttribute('aria-label', `${name} 보관함에서 빼기`);
-    chip.append(del);
+    chip.append(nameBtn, del);
     return chip;
   }
 
-  /** 편집 모드의 그룹: 이름 칸(그룹 없음은 글자), 삭제, 칩, 이름 추가 칸. 끌어다 놓은 칩을 받는다 */
-  function editGroupBlock(groups: RosterGroup[], index: number): HTMLElement {
+  /** 그룹 이름 바꾸기 칸. Enter·칸 밖 누르기는 저장, Esc 는 취소 */
+  function renameInput(index: number, title: string): HTMLInputElement {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'vgroup-rename';
+    input.value = title;
+    input.maxLength = 38;
+    input.setAttribute('aria-label', '그룹 이름');
+    let cancelled = false;
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelled = true;
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', () => {
+      renaming = null;
+      if (cancelled) renderVaultManage();
+      else renameGroup(index, input.value);
+    });
+    return input;
+  }
+
+  /** 관리 창의 그룹: 이름·인원·연필·휴지통(그룹 없음은 이름만)과 칩. 끌어다 놓은 칩을 받는다 */
+  function manageGroup(groups: RosterGroup[], index: number): HTMLElement {
     const group = groups[index];
-    const block = document.createElement('div');
-    block.className = 'vault-group editing';
-    block.dataset.groupIndex = String(index);
+    const section = document.createElement('section');
+    section.className = 'vgroup';
+    section.dataset.groupIndex = String(index);
     const head = document.createElement('div');
-    head.className = 'vault-group-head';
-    if (group.title === null) {
-      const title = document.createElement('span');
-      title.className = 'vault-group-title';
-      title.textContent = '그룹 없음';
-      head.append(title);
+    head.className = 'vgroup-head';
+    // 이 그룹 이름을 바꾸는 중인지
+    const isRenaming = renaming === index && group.title !== null;
+    if (isRenaming) {
+      head.append(renameInput(index, group.title ?? ''));
     } else {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'vault-group-name';
-      input.value = group.title;
-      input.maxLength = 38;
-      input.setAttribute('aria-label', '그룹 이름');
-      input.addEventListener('change', () => renameGroup(index, input.value));
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') input.blur();
-      });
-      head.append(input);
+      const title = document.createElement('span');
+      title.className = 'vgroup-title';
+      title.textContent = group.title ?? '그룹 없음';
+      const count = document.createElement('span');
+      count.className = 'vgroup-count';
+      count.textContent = `${group.names.length}명`;
+      head.append(title, count);
     }
-    const count = document.createElement('span');
-    count.className = 'vault-group-count';
-    count.textContent = `${group.names.length}명`;
-    head.append(count);
-    if (group.title !== null) {
-      head.append(confirmButton('그룹 삭제', `정말 삭제 (${group.names.length}명 포함)`, () => removeGroup(index)));
+    // 이름 있는 그룹이고 이름을 바꾸는 중이 아닐 때만 아이콘을 단다
+    const withIcons = group.title !== null && !isRenaming;
+    if (withIcons) {
+      const edit = chipButton(ICON_EDIT, 'icon-btn vgroup-edit', () => {
+        renaming = index;
+        renderVaultManage();
+      });
+      edit.setAttribute('aria-label', `${group.title} 이름 바꾸기`);
+      const del = confirmButton(ICON_DELETE, `정말 삭제 (${group.names.length}명)`, () => removeGroup(index));
+      del.classList.add('icon-btn', 'vgroup-del');
+      del.title = `${group.title} 그룹 삭제`;
+      head.append(edit, del);
     }
     const chips = document.createElement('div');
     chips.className = 'chips';
-    chips.append(...group.names.map((name) => editChip(groups, index, name)));
-    const add = document.createElement('form');
-    add.className = 'group-add';
-    add.noValidate = true;
-    const addInput = document.createElement('input');
-    addInput.type = 'text';
-    addInput.placeholder = '이름 추가, 쉼표로 여러 명';
-    addInput.setAttribute('aria-label', `${group.title ?? '그룹 없음'}에 이름 추가`);
-    const addBtn = document.createElement('button');
-    addBtn.type = 'submit';
-    addBtn.className = 'small';
-    addBtn.textContent = '추가';
-    add.append(addInput, addBtn);
-    add.addEventListener('submit', (e) => {
+    chips.append(...group.names.map((name) => manageChip(index, name)));
+    section.append(head, chips);
+    if (group.names.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'field-help';
+      empty.textContent = '비어 있습니다. 위에서 이름을 넣거나 칩을 끌어다 놓으세요.';
+      section.append(empty);
+    }
+    section.addEventListener('dragover', (e) => {
       e.preventDefault();
-      addToGroup(index, addInput.value);
+      section.classList.add('drop-target');
     });
-    block.addEventListener('dragover', (e) => {
+    section.addEventListener('dragleave', () => section.classList.remove('drop-target'));
+    section.addEventListener('drop', (e) => {
       e.preventDefault();
-      block.classList.add('drop-target');
+      section.classList.remove('drop-target');
+      const chipId = e.dataTransfer?.getData('text/plain') ?? '';
+      // 칩에서 온 값("그룹번호:이름") 여부
+      const fromChip = /^\d+:/.test(chipId);
+      if (fromChip) moveChips([chipId], index);
     });
-    block.addEventListener('dragleave', () => block.classList.remove('drop-target'));
-    block.addEventListener('drop', (e) => {
-      e.preventDefault();
-      block.classList.remove('drop-target');
-      try {
-        const { name, from } = JSON.parse(e.dataTransfer?.getData('text/plain') ?? '');
-        // 다른 칩에서 온 값 여부
-        const fromChip = typeof name === 'string' && Number.isInteger(from);
-        if (fromChip) moveName(from, name, index);
-      } catch {
-        // 칩이 아닌 것을 놓으면 무시
-      }
-    });
-    block.append(head, chips, add);
-    return block;
+    return section;
+  }
+
+  /** 관리 창을 지금 보관함으로 다시 그린다. 창이 닫혀 있으면 하지 않는다 */
+  function renderVaultManage() {
+    if (!vaultDialog.open) return;
+    const groups = rosterModel();
+    const choices = groupChoices(groups);
+    const hasGroups = groups.some((g) => g.title !== null);
+    // 이름 추가 줄: 마지막으로 고른 그룹이 아직 있으면 그 그룹, 아니면 첫 그룹
+    const last = addTarget ?? -1;
+    const lastExists = groups[last] !== undefined;
+    const fallback = hasGroups ? 1 : 0;
+    vaultAddGroup.replaceChildren(...choices.map((c) => new Option(c.label, String(c.value))));
+    vaultAddGroup.value = String(lastExists ? last : fallback);
+    vaultAddGroup.hidden = !hasGroups;
+    // 보일 그룹: 이름 있는 그룹 전부, 그룹 없음은 이름이 있거나 그룹이 하나도 없을 때
+    const shown = groups
+      .map((_, i) => i)
+      .filter((i) => groups[i].title !== null || groups[i].names.length > 0 || !hasGroups);
+    vaultManage.replaceChildren(...shown.map((i) => manageGroup(groups, i)));
+    $('#vaultMoveBar').hidden = selected.size === 0;
+    $('#vaultSelCount').textContent = `${selected.size}명 선택됨`;
+    fillChoices(vaultMoveTo, '옮길 그룹', choices);
+    if (renaming !== null) {
+      const input = vaultManage.querySelector<HTMLInputElement>('.vgroup-rename');
+      input?.focus();
+      input?.select();
+    }
+  }
+
+  function toggleSelected(chipId: string) {
+    if (selected.has(chipId)) selected.delete(chipId);
+    else selected.add(chipId);
+    renderVaultManage();
+  }
+
+  /** 칩("그룹번호:이름")들을 다른 그룹으로 옮긴다. 그 그룹에 이미 있으면 원래 자리에서만 뺀다 */
+  function moveChips(chipIds: string[], to: number) {
+    const groups = rosterModel();
+    if (groups[to] === undefined) return;
+    for (const chipId of chipIds) {
+      const sep = chipId.indexOf(':');
+      const from = Number(chipId.slice(0, sep));
+      const name = chipId.slice(sep + 1);
+      // 옮길 필요 없음: 같은 그룹이거나 없는 그룹
+      const skip = from === to || groups[from] === undefined;
+      if (skip) continue;
+      groups[from].names = groups[from].names.filter((n) => n !== name);
+      if (!groups[to].names.includes(name)) groups[to].names.push(name);
+    }
+    selected = new Set();
+    saveModel(groups);
   }
 
   function renameGroup(index: number, raw: string) {
     const groups = rosterModel();
     const title = cleanTitle(raw);
     // 빈 이름이면 바꾸지 않고 원래 이름으로 다시 그린다
-    if (title) groups[index].title = title;
+    if (title && groups[index]) groups[index].title = title;
     saveModel(groups);
   }
 
   function removeGroup(index: number) {
     const groups = rosterModel();
     groups.splice(index, 1);
+    selected = new Set();
+    addTarget = null;
     saveModel(groups);
   }
 
@@ -781,82 +847,53 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     let title = '새 그룹';
     for (let n = 2; titles.has(title); n++) title = `새 그룹 ${n}`;
     groups.push({ title, names: [] });
-    focusAfterRender = { group: groups.length - 1, field: 'title' };
-    saveModel(groups);
-  }
-
-  function addToGroup(index: number, text: string) {
-    const names = splitNames(text);
-    if (names.length === 0) return;
-    const groups = rosterModel();
-    groups[index].names.push(...names);
-    focusAfterRender = { group: index, field: 'add' };
+    renaming = groups.length - 1;
+    addTarget = renaming;
     saveModel(groups);
   }
 
   function removeName(index: number, name: string) {
     const groups = rosterModel();
+    if (!groups[index]) return;
     groups[index].names = groups[index].names.filter((n) => n !== name);
+    selected.delete(`${index}:${name}`);
     saveModel(groups);
   }
 
-  function moveName(from: number, name: string, to: number) {
-    const groups = rosterModel();
-    // 옮길 수 없는 경우: 같은 그룹이거나 없는 그룹
-    const invalid = from === to || groups[from] === undefined || groups[to] === undefined;
-    if (invalid) return;
-    groups[from].names = groups[from].names.filter((n) => n !== name);
-    if (!groups[to].names.includes(name)) groups[to].names.push(name);
-    saveModel(groups);
-  }
+  // ----- 이번 추첨에 넣고 빼기 -----
 
   function renderRoster() {
     const entries = readEntries();
     syncPerPerson(entries);
     const inRoster = new Set(rosterNames());
     pickedChips.replaceChildren(
-      ...[...entries].map(([key, count]) => pickedChip(bareName(key), key, count, inRoster.has(bareName(key))))
+      ...[...entries].map(([entryKey, count]) =>
+        pickedChip(bareName(entryKey), entryKey, count, inRoster.has(bareName(entryKey)))
+      )
     );
     const picked = new Set([...entries.keys()].map(bareName));
     const groups = rosterModel();
     // 그룹 이름 표시 여부: 그룹을 하나라도 만들었을 때만 그룹 이름을 단다
     const withTitles = groups.some((g) => g.title !== null);
-    if (vaultEditing) {
-      // 편집에서 보일 그룹: 이름 있는 그룹 전부, 그룹 없음은 이름이 있거나 그룹이 하나도 없을 때
-      const shown = groups
-        .map((_, i) => i)
-        .filter((i) => groups[i].title !== null || groups[i].names.length > 0 || !withTitles);
-      vaultGroups.replaceChildren(...shown.map((i) => editGroupBlock(groups, i)));
-    } else {
-      const filled = groups.filter((g) => g.names.length > 0);
-      vaultGroups.replaceChildren(...filled.map((g) => groupBlock(g, picked, withTitles)));
-    }
+    const filled = groups.filter((g) => g.names.length > 0);
+    vaultGroups.replaceChildren(...filled.map((g) => groupBlock(g, picked, withTitles)));
     const waitingCount = [...inRoster].filter((name) => !picked.has(name)).length;
     const hasRoster = inRoster.size > 0;
     // 보관함 이름이 모두 이번 추첨에 들어감 여부
     const allIn = hasRoster && waitingCount === 0;
     $('#pickedEmpty').hidden = entries.size > 0;
     $('#btnClearPicked').hidden = entries.size === 0;
-    $('#rosterEmpty').hidden = hasRoster || vaultEditing;
-    $('#rosterAllIn').hidden = !allIn || vaultEditing;
-    $('#rosterAll').hidden = waitingCount === 0 || vaultEditing;
-    $('#vaultEditTools').hidden = !vaultEditing;
-    if (focusAfterRender) {
-      const { group, field } = focusAfterRender;
-      focusAfterRender = null;
-      const selector = field === 'title' ? '.vault-group-name' : '.group-add input';
-      const el = vaultGroups.querySelector<HTMLInputElement>(`[data-group-index="${group}"] ${selector}`);
-      el?.focus();
-      if (field === 'title') el?.select();
-    }
+    $('#rosterEmpty').hidden = hasRoster;
+    $('#rosterAllIn').hidden = !allIn;
+    $('#rosterAll').hidden = waitingCount === 0;
   }
 
   /** 구슬 수를 delta 만큼 바꾼다. 0 이하가 되면 참가자에서 뺀다 */
-  function changeCount(key: string, delta: number) {
+  function changeCount(entryKey: string, delta: number) {
     const entries = readEntries();
-    const next = (entries.get(key) ?? 0) + delta;
-    if (next > 0) entries.set(key, next);
-    else entries.delete(key);
+    const next = (entries.get(entryKey) ?? 0) + delta;
+    if (next > 0) entries.set(entryKey, next);
+    else entries.delete(entryKey);
     commit(entries);
   }
 
@@ -893,6 +930,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     void flushPrefs();
     rosterEdit.value = rosterEditorText();
     renderRoster();
+    renderVaultManage();
   }
 
   /** 보관함에 없는 이름을 고른 그룹(기본은 그룹 없음)에 넣어 저장한다. 넣은 수를 돌려준다 */
@@ -917,26 +955,51 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     rosterEdit.focus();
   }
 
-  function setVaultEditing(on: boolean) {
-    vaultEditing = on;
-    rosterToggle.textContent = on ? '편집 끝내기' : '보관함 편집';
-    rosterToggle.setAttribute('aria-pressed', String(on));
-    if (!on) setTextEditorOpen(false);
-    renderRoster();
-  }
-
   rosterEdit.value = rosterEditorText();
-  rosterToggle.addEventListener('click', () => setVaultEditing(!vaultEditing));
-  rosterTextBtn.addEventListener('click', () => setTextEditorOpen(rosterEditor.hidden));
+  $('#rosterToggleEdit').addEventListener('click', () => {
+    selected = new Set();
+    renaming = null;
+    setTextEditorOpen(false);
+    vaultDialog.showModal();
+    renderVaultManage();
+    vaultAddName.focus();
+  });
+  vaultDialog.addEventListener('close', () => {
+    selected = new Set();
+    renaming = null;
+  });
+  $('#btnVaultClose').addEventListener('click', () => vaultDialog.close());
+  $('#vaultAddForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const names = splitNames(vaultAddName.value);
+    if (names.length === 0) return;
+    const groups = rosterModel();
+    const chosen = Number(vaultAddGroup.value);
+    const target = groups[chosen] ? chosen : 0;
+    groups[target].names.push(...names);
+    addTarget = target;
+    vaultAddName.value = '';
+    saveModel(groups);
+    vaultAddName.focus();
+  });
+  vaultAddGroup.addEventListener('change', () => {
+    addTarget = Number(vaultAddGroup.value);
+  });
+  vaultMoveTo.addEventListener('change', () => moveChips([...selected], Number(vaultMoveTo.value)));
+  $('#btnVaultUnselect').addEventListener('click', () => {
+    selected = new Set();
+    renderVaultManage();
+  });
   $('#btnAddGroup').addEventListener('click', addGroup);
+  rosterTextBtn.addEventListener('click', () => setTextEditorOpen(rosterEditor.hidden));
   $('#rosterSave').addEventListener('click', () => {
     saveRoster(parseRosterText(rosterEdit.value));
-    setVaultEditing(false);
+    vaultDialog.close();
     const count = rosterNames().length;
     toast(count ? `이름 보관함에 ${count}명을 저장했습니다.` : '이름 보관함을 비웠습니다.');
   });
   $('#rosterFromNames').addEventListener('click', () => {
-    // 편집 중인 내용을 먼저 저장하고, 거기에 없는 이번 참가자를 그룹 없음에 넣는다
+    // 글 칸 내용을 먼저 저장하고, 거기에 없는 이번 참가자를 그룹 없음에 넣는다
     saveRoster(parseRosterText(rosterEdit.value));
     const added = keepInRoster(getNames().map(bareName));
     toast(added > 0 ? `이번 참가자 ${added}명을 보관함에 넣었습니다.` : '이번 참가자가 모두 보관함에 있습니다.');

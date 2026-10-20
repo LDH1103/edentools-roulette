@@ -61,27 +61,12 @@
         <span class="vault-note">서버에 저장됨 · 모두 같이 씀</span>
         <span class="roster-actions">
           <button type="button" class="small" id="rosterAll">전체 넣기</button>
-          <button type="button" class="small" id="rosterToggleEdit" aria-pressed="false">보관함 편집</button>
+          <button type="button" class="small" id="rosterToggleEdit" aria-haspopup="dialog">보관함 편집</button>
         </span>
       </div>
       <div class="vault-groups" id="rosterChips"></div>
-      <div class="vault-edit-tools" id="vaultEditTools" hidden>
-        <p class="hint">그룹 이름은 눌러서 바로 고칩니다. 칩의 ×로 지우고 "옮기기"로 다른 그룹에 보냅니다. 컴퓨터에서는 칩을 끌어다 놓아도 됩니다.</p>
-        <div class="row-buttons">
-          <button type="button" class="small" id="btnAddGroup">그룹 추가</button>
-          <button type="button" class="small" id="btnRosterText" aria-expanded="false" aria-controls="rosterEditor">글로 한 번에 고치기</button>
-        </div>
-      </div>
       <p class="hint" id="rosterEmpty">자주 쓰는 이름을 "보관함 편집"에 저장해 두면 눌러서 넣을 수 있습니다. 팀별로 묶을 수도 있습니다.</p>
       <p class="hint" id="rosterAllIn" hidden>보관함의 이름이 모두 이번 추첨에 들어 있습니다.</p>
-      <div class="roster-editor" id="rosterEditor" hidden>
-        <textarea id="rosterEdit" rows="6" spellcheck="false" placeholder="[개발팀]&#10;김민준, 이서연, 박지호&#10;[디자인팀]&#10;정우진, 강하은" aria-label="이름 보관함 편집"></textarea>
-        <p class="hint"><code>[그룹 이름]</code> 다음 줄에 그 그룹 이름을 쉼표로 이어 적습니다. 줄을 바꿔 적어도 되고, 한 사람이 여러 그룹에 있어도 됩니다.</p>
-        <div class="row-buttons">
-          <button type="button" class="small" id="rosterSave">보관함 저장</button>
-          <button type="button" class="small" id="rosterFromNames">이번 참가자를 보관함에 넣기</button>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -222,6 +207,42 @@
     </div>
     <p class="field-help">채널 목록은 서버에 저장되어 같이 씁니다. 주소는 서버에만 보관하고 화면에는 채널 이름만 보입니다.</p>
   </form>
+</dialog>
+
+<!-- 이름 보관함 관리: 그룹과 이름을 넣고 빼고 옮긴다 -->
+<dialog id="vaultDialog" class="dialog dialog-wide" aria-labelledby="vaultDialogTitle">
+  <div class="dialog-body">
+    <div class="dialog-head">
+      <h2 id="vaultDialogTitle">이름 보관함 관리</h2>
+      <button type="button" class="dialog-close" id="btnVaultClose" aria-label="닫기">✕</button>
+    </div>
+    <form class="vault-add" id="vaultAddForm" novalidate>
+      <input type="text" id="vaultAddName" maxlength="200" placeholder="이름 추가, 쉼표로 여러 명" autocomplete="off" enterkeyhint="done" aria-label="보관함에 넣을 이름" />
+      <select id="vaultAddGroup" aria-label="넣을 그룹"></select>
+      <button type="submit" class="primary" id="btnVaultAdd">추가</button>
+    </form>
+    <p class="field-help">칩을 눌러 고르면 아래에서 한 번에 옮길 수 있습니다. 컴퓨터에서는 끌어다 놓아도 됩니다.</p>
+    <div class="vault-manage" id="vaultManage"></div>
+    <div class="dialog-actions">
+      <button type="button" id="btnAddGroup">+ 그룹 추가</button>
+      <span class="sep"></span>
+      <button type="button" id="btnRosterText" aria-expanded="false" aria-controls="rosterEditor">글로 한 번에 고치기</button>
+    </div>
+    <div class="roster-editor" id="rosterEditor" hidden>
+      <textarea id="rosterEdit" rows="6" spellcheck="false" placeholder="[개발팀]&#10;김민준, 이서연, 박지호&#10;[디자인팀]&#10;정우진, 강하은" aria-label="이름 보관함 글로 고치기"></textarea>
+      <p class="field-help"><code>[그룹 이름]</code> 다음 줄에 그 그룹 이름을 쉼표로 이어 적습니다. 한 사람이 여러 그룹에 있어도 됩니다.</p>
+      <div class="dialog-actions">
+        <button type="button" id="rosterFromNames">이번 참가자를 보관함에 넣기</button>
+        <span class="sep"></span>
+        <button type="button" class="primary" id="rosterSave">보관함 저장</button>
+      </div>
+    </div>
+    <div class="move-bar" id="vaultMoveBar" hidden>
+      <span class="move-count" id="vaultSelCount"></span>
+      <select id="vaultMoveTo" aria-label="고른 이름을 옮길 그룹"></select>
+      <button type="button" id="btnVaultUnselect">선택 해제</button>
+    </div>
+  </div>
 </dialog>
 
 <!-- 카운트다운·따라잡기·오류 안내 -->
