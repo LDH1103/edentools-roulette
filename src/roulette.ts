@@ -571,10 +571,6 @@ export class Roulette extends EventTarget {
     return this._tick;
   }
 
-  public getNames() {
-    return this._names.slice();
-  }
-
   public setSpeed(value: number) {
     if (value <= 0) {
       throw new Error('Speed multiplier must larger than 0');
