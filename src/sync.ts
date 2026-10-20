@@ -1,7 +1,9 @@
-// 방(room) 동기화 클라이언트. 주최자가 만든 방에 WebSocket 으로 붙어
-// 설정·시드·시작 시각을 받고, 서버 시계와의 차이를 재서 모두 같은 타임라인을 쓴다.
+// 방(room) 동기화 클라이언트. 주최자가 만든 방의 설정·시드·시작 시각을 받고,
+// 서버 시계와의 차이를 재서 모두 같은 타임라인을 쓴다.
+// 기본은 WebSocket 이고, 회사 프록시 등으로 막히면 HTTP 폴링으로 같은 상태를 받는다.
 
 export type WinnerSetting = {
+  /** custom 은 예전 방 호환용. 지금 화면은 first / last / multi 만 만든다 */
   type: 'first' | 'last' | 'custom' | 'multi';
   /** 1-based, 양끝 포함 */
   start: number;
@@ -26,6 +28,11 @@ export type RoomState = RoomConfig & {
   round: number;
 };
 
+/** connecting: 처음 붙는 중, online: 실시간, polling: WebSocket 대신 주기 조회, reconnecting: 끊겨서 다시 붙는 중 */
+export type ConnState = 'connecting' | 'online' | 'polling' | 'reconnecting';
+
+type RoomResponse = { room: RoomState; serverNow: number; count?: number };
+
 type ServerMessage =
   | { t: 'state'; room: RoomState; serverNow: number; count: number }
   | { t: 'count'; count: number }
@@ -35,13 +42,27 @@ type ServerMessage =
 export type RoomEvents = {
   state: RoomState;
   count: number;
-  online: boolean;
+  conn: ConnState;
   error: string;
 };
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 10000;
 const PING_INTERVAL_MS = 15000;
+/** 이 시간 안에 WebSocket 이 안 열리면 폴링을 같이 돌린다 */
+const WS_FALLBACK_MS = 4000;
+const POLL_INTERVAL_MS = 1500;
+
+/** 서버가 돌려준 { error } 를 읽어 사람이 읽을 메시지로 던진다 */
+async function failFrom(res: Response): Promise<never> {
+  let message = '';
+  try {
+    message = ((await res.json()) as { error?: string }).error ?? '';
+  } catch {
+    // 본문이 JSON 이 아니면 상태 코드만 쓴다
+  }
+  throw new Error(message || `서버 오류 (${res.status})`);
+}
 
 export async function createRoom(
   apiBase: string,
@@ -52,17 +73,7 @@ export async function createRoom(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(config),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(text || `방 만들기 실패 (${res.status})`);
-  }
-  return res.json();
-}
-
-export async function fetchRoom(apiBase: string, id: string): Promise<{ room: RoomState; serverNow: number }> {
-  const res = await fetch(`${apiBase}/rooms/${encodeURIComponent(id)}`);
-  if (res.status === 404) throw new Error('없는 방이거나 만료된 링크입니다.');
-  if (!res.ok) throw new Error(`방 정보를 받지 못했습니다 (${res.status})`);
+  if (!res.ok) return failFrom(res);
   return res.json();
 }
 
@@ -72,24 +83,30 @@ export class RoomClient {
   private attempts = 0;
   private pingTimer = 0;
   private reconnectTimer = 0;
+  private fallbackTimer = 0;
+  private pollTimer = 0;
   /** 서버 시각 - 내 시각. 왕복 지연이 가장 짧았던 표본을 믿는다 */
   private offset = 0;
   private bestRtt = Infinity;
   private listeners: { [K in keyof RoomEvents]: ((v: RoomEvents[K]) => void)[] } = {
     state: [],
     count: [],
-    online: [],
+    conn: [],
     error: [],
   };
 
   public state: RoomState | null = null;
   public count = 0;
-  public online = false;
+  public conn: ConnState = 'connecting';
 
   constructor(
     private apiBase: string,
     private roomId: string
   ) {}
+
+  private get roomUrl(): string {
+    return `${this.apiBase}/rooms/${encodeURIComponent(this.roomId)}`;
+  }
 
   on<K extends keyof RoomEvents>(name: K, fn: (v: RoomEvents[K]) => void): void {
     this.listeners[name].push(fn);
@@ -104,34 +121,124 @@ export class RoomClient {
     return Date.now() + this.offset;
   }
 
+  private setConn(c: ConnState): void {
+    if (this.conn === c) return;
+    this.conn = c;
+    this.emit('conn', c);
+  }
+
+  /** 시계 차이 표본. t0 보내기 직전, t1 받은 직후의 내 시각 */
+  private sampleClock(serverNow: number, t0: number, t1: number): void {
+    const rtt = t1 - t0;
+    if (rtt < this.bestRtt) {
+      this.bestRtt = rtt;
+      this.offset = serverNow + rtt / 2 - t1;
+    }
+  }
+
+  private applyRoom(room: RoomState, count?: number): void {
+    this.state = room;
+    this.emit('state', room);
+    if (count !== undefined) {
+      this.count = count;
+      this.emit('count', count);
+    }
+  }
+
+  private async getRoom(): Promise<void> {
+    const t0 = Date.now();
+    const res = await fetch(this.roomUrl, { cache: 'no-store' });
+    const t1 = Date.now();
+    if (!res.ok) return failFrom(res);
+    const body = (await res.json()) as RoomResponse;
+    this.sampleClock(body.serverNow, t0, t1);
+    this.applyRoom(body.room, body.count);
+  }
+
+  /** 첫 상태를 HTTP 로 받는다. 없는 방이면 예외 */
+  async load(): Promise<void> {
+    await this.getRoom();
+  }
+
+  /** 주최자 동작은 HTTP 로 보낸다. WebSocket 이 막힌 환경에서도 시작할 수 있다 */
+  async action(kind: 'start' | 'reset', key: string): Promise<void> {
+    const t0 = Date.now();
+    const res = await fetch(`${this.roomUrl}/${kind}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key }),
+    });
+    const t1 = Date.now();
+    if (!res.ok) return failFrom(res);
+    const body = (await res.json()) as RoomResponse;
+    this.sampleClock(body.serverNow, t0, t1);
+    this.applyRoom(body.room, body.count);
+  }
+
   connect(): void {
     this.closed = false;
     this.open();
+    window.clearTimeout(this.fallbackTimer);
+    this.fallbackTimer = window.setTimeout(() => {
+      if (this.conn !== 'online') this.startPolling();
+    }, WS_FALLBACK_MS);
   }
 
   close(): void {
     this.closed = true;
     window.clearTimeout(this.reconnectTimer);
+    window.clearTimeout(this.fallbackTimer);
     window.clearInterval(this.pingTimer);
+    this.stopPolling();
     this.ws?.close();
     this.ws = null;
   }
 
-  send(msg: object): boolean {
+  private send(msg: object): boolean {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
     this.ws.send(JSON.stringify(msg));
     return true;
   }
 
+  private startPolling(): void {
+    if (this.pollTimer || this.closed) return;
+    this.setConn('polling');
+    const tick = async () => {
+      try {
+        await this.getRoom();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        // 방이 사라졌으면 더 물어볼 필요가 없다. 네트워크 오류는 다음 주기에 다시 시도한다
+        if (/만료|없는 방/.test(message)) {
+          this.stopPolling();
+          this.emit('error', message);
+        }
+      }
+    };
+    void tick();
+    this.pollTimer = window.setInterval(tick, POLL_INTERVAL_MS);
+  }
+
+  private stopPolling(): void {
+    window.clearInterval(this.pollTimer);
+    this.pollTimer = 0;
+  }
+
   private open(): void {
-    const url = `${this.apiBase.replace(/^http/, 'ws')}/rooms/${encodeURIComponent(this.roomId)}/ws`;
-    const ws = new WebSocket(url);
+    const url = `${this.roomUrl.replace(/^http/, 'ws')}/ws`;
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      this.startPolling();
+      return;
+    }
     this.ws = ws;
 
     ws.addEventListener('open', () => {
       this.attempts = 0;
-      this.online = true;
-      this.emit('online', true);
+      this.stopPolling();
+      this.setConn('online');
       // 시계 차이는 연결 직후 몇 번 재서 가장 좋은 표본을 쓴다
       this.ping();
       window.setTimeout(() => this.ping(), 300);
@@ -149,24 +256,15 @@ export class RoomClient {
       }
       switch (msg.t) {
         case 'state':
-          this.state = msg.room;
-          this.count = msg.count;
-          this.emit('state', msg.room);
-          this.emit('count', msg.count);
+          this.applyRoom(msg.room, msg.count);
           break;
         case 'count':
           this.count = msg.count;
           this.emit('count', msg.count);
           break;
-        case 'pong': {
-          const now = Date.now();
-          const rtt = now - msg.c;
-          if (rtt < this.bestRtt) {
-            this.bestRtt = rtt;
-            this.offset = msg.s + rtt / 2 - now;
-          }
+        case 'pong':
+          this.sampleClock(msg.s, msg.c, Date.now());
           break;
-        }
         case 'error':
           this.emit('error', msg.message);
           break;
@@ -181,11 +279,10 @@ export class RoomClient {
       if (this.ws !== ws) return;
       this.ws = null;
       window.clearInterval(this.pingTimer);
-      if (this.online) {
-        this.online = false;
-        this.emit('online', false);
-      }
       if (this.closed) return;
+      // 두 번 연달아 실패하면 폴링으로 상태를 계속 받으면서 WebSocket 은 뒤에서 다시 시도한다
+      if (this.attempts >= 1) this.startPolling();
+      else if (!this.pollTimer) this.setConn('reconnecting');
       const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** this.attempts);
       this.attempts++;
       this.reconnectTimer = window.setTimeout(() => this.open(), delay);

@@ -25,144 +25,125 @@
 <script type="module" src="./src/index.ts"></script>
 <h1 class="sr-only">구슬 레이스 - 링크 하나로 함께 보는 추첨</h1>
 
-<button id="btnTheme" class="btn-theme" type="button" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
-
-<!-- 설정 모드: 주최자가 참가자·당첨 방식을 정하고 링크를 만들거나, 방 없이 혼자 돌린다 -->
-<div id="settings" class="settings" hidden>
-  <div class="right">
-    <button id="btnToggleSettings" class="btn-toggle-settings" type="button">
-      <span>설정</span>
-      <i class="toggle-arrow">▲</i>
-    </button>
-    <div class="collapsible-rows collapsed">
-      <div class="row">
-        <label for='sltMap'>
-          <i class="icon map"></i>
-          <span>맵</span>
-        </label>
-        <div class="map-picker">
-          <select id="sltMap"></select>
-        </div>
-      </div>
-      <div class="row row-toggles">
-        <div class='toggle-item'>
-          <label for='chkAutoRecording'>
-            <i class="icon record"></i>
-            <span>녹화</span>
-          </label>
-          <input type="checkbox" id="chkAutoRecording" />
-        </div>
-        <div class='toggle-item'>
-          <label for='chkSkill'>
-            <i class="icon bomb"></i>
-            <span>스킬</span>
-          </label>
-          <input type="checkbox" id="chkSkill" checked />
-        </div>
-      </div>
-      <div class="row">
-        <label>
-          <i class="icon trophy"></i>
-          <span>당첨</span>
-        </label>
-        <div class="btn-group">
-          <button class="btn-winner active" type="button" data-type="first">먼저 도착</button>
-          <button class="btn-winner" type="button" data-type="last">마지막 도착</button>
-          <button class="btn-winner" type="button" data-type="custom">특정 등수</button>
-          <button class="btn-winner" type="button" data-type="multi">범위</button>
-        </div>
-      </div>
-      <div class="row row-winner-detail" id="winCountRow">
-        <label></label>
-        <div class="btn-group range-group">
-          <input type="number" id="in_winCount" value="1" min="1" inputmode="numeric" />
-          <span class="range-sep">명</span>
-        </div>
-      </div>
-      <div class="row row-winner-detail" id="winRankRow" hidden>
-        <label></label>
-        <div class="btn-group range-group">
-          <input type="number" id="in_rank" value="1" min="1" inputmode="numeric" />
-          <span class="range-sep">등</span>
-        </div>
-      </div>
-      <div class="row row-winner-detail" id="winRangeRow" hidden>
-        <label></label>
-        <div class="btn-group range-group">
-          <input type="number" id="in_rangeStart" value="1" min="1" inputmode="numeric" />
-          <span class="range-sep">~</span>
-          <input type="number" id="in_rangeEnd" value="3" min="1" inputmode="numeric" />
-          <span class="range-sep">등</span>
-        </div>
-      </div>
-      <div class="row">
-        <label></label>
-        <span class="winner-summary" id="winnerSummary"></span>
-      </div>
+<!-- 설정 화면: 주최자가 참가자·당첨 방식을 정하고 공유 링크를 만들거나, 방 없이 혼자 돌린다 -->
+<div id="settings" class="panel settings" hidden>
+  <section class="names" aria-label="참가자">
+    <div class="names-head">
+      <h3><label for="in_names">참가자</label></h3>
+      <span class="marble-count" id="marbleCount"></span>
     </div>
-  </div>
-  <div class="left">
-    <h3>참가자 이름 (쉼표나 줄바꿈으로 구분 · 이름/가중치*개수)</h3>
-    <textarea id="in_names" placeholder="홍길동&#10;김철수*2&#10;이영희/3"></textarea>
+    <p class="hint">쉼표나 줄바꿈으로 구분합니다. <code>이름*2</code>는 구슬 2개, <code>이름/3</code>은 가중치 3입니다.</p>
+    <textarea id="in_names" rows="4" spellcheck="false" placeholder="홍길동&#10;김철수*2&#10;이영희/3"></textarea>
+
     <div class="roster">
       <div class="roster-head">
-        <span>저장된 명단 <small>클릭하면 참가자에 넣거나 뺍니다</small></span>
+        <span class="roster-title">저장된 명단</span>
         <span class="roster-actions">
-          <button type="button" class="btn small" id="rosterAll">전체 추가</button>
-          <button type="button" class="btn small" id="rosterNone">전체 빼기</button>
+          <button type="button" class="small" id="rosterAll">전체 추가</button>
+          <button type="button" class="small" id="rosterNone">전체 빼기</button>
+          <button type="button" class="small" id="rosterToggleEdit" aria-expanded="false" aria-controls="rosterEditor">편집</button>
         </span>
       </div>
       <div class="chips" id="rosterChips"></div>
-      <p class="roster-empty" id="rosterEmpty">아직 저장된 명단이 없습니다. 아래 "명단 편집"에서 팀원 이름을 한 번 저장해 두면 다음부터는 클릭만으로 고를 수 있습니다.</p>
-      <details id="rosterDetails">
-        <summary>명단 편집</summary>
-        <textarea id="rosterEdit" placeholder="팀원 이름을 한 줄에 한 명씩"></textarea>
-        <div class="roster-actions">
-          <button type="button" class="btn small" id="rosterSave">명단 저장</button>
-          <button type="button" class="btn small" id="rosterFromNames">현재 참가자를 명단에 추가</button>
-          <small>이 브라우저에만 저장됩니다.</small>
+      <p class="hint" id="rosterEmpty">자주 쓰는 이름을 "편집"에서 저장해 두면, 다음부터는 이름을 눌러 넣고 뺄 수 있습니다.</p>
+      <div class="roster-editor" id="rosterEditor" hidden>
+        <textarea id="rosterEdit" rows="3" spellcheck="false" placeholder="한 줄에 한 명씩" aria-label="저장할 명단"></textarea>
+        <div class="row-buttons">
+          <button type="button" class="small" id="rosterSave">명단 저장</button>
+          <button type="button" class="small" id="rosterFromNames">지금 참가자 가져오기</button>
+          <span class="hint">이 브라우저에만 저장됩니다.</span>
         </div>
-      </details>
+      </div>
     </div>
+  </section>
+
+  <section class="options" aria-label="추첨 설정">
+    <button id="btnToggleSettings" class="btn-toggle-settings" type="button" aria-expanded="false" aria-controls="settingsRows">
+      <span id="settingsSummary">설정</span>
+      <i class="toggle-arrow" aria-hidden="true">▲</i>
+    </button>
+    <div class="collapsible-rows collapsed" id="settingsRows">
+      <div class="opt-row">
+        <label class="opt-label" for="sltMap"><i class="icon map" aria-hidden="true"></i>맵</label>
+        <select id="sltMap"></select>
+      </div>
+      <div class="opt-row">
+        <span class="opt-label" id="winnerLabel"><i class="icon trophy" aria-hidden="true"></i>당첨</span>
+        <div class="seg" role="group" aria-labelledby="winnerLabel">
+          <button type="button" class="btn-winner" data-type="first" aria-pressed="true">앞에서</button>
+          <button type="button" class="btn-winner" data-type="last" aria-pressed="false">뒤에서</button>
+          <button type="button" class="btn-winner" data-type="multi" aria-pressed="false">등수로</button>
+        </div>
+      </div>
+      <div class="opt-row opt-sub" id="winCountRow">
+        <input type="number" id="in_winCount" value="1" min="1" inputmode="numeric" aria-label="당첨 인원" />
+        <span>명</span>
+      </div>
+      <div class="opt-row opt-sub" id="winRangeRow" hidden>
+        <input type="number" id="in_rangeStart" value="1" min="1" inputmode="numeric" aria-label="시작 등수" />
+        <span>등부터</span>
+        <input type="number" id="in_rangeEnd" value="3" min="1" inputmode="numeric" aria-label="끝 등수" />
+        <span>등까지</span>
+      </div>
+      <p class="winner-summary" id="winnerSummary"></p>
+      <div class="opt-row opt-toggles">
+        <label class="toggle" for="chkSkill"><i class="icon bomb" aria-hidden="true"></i>스킬 <input type="checkbox" class="switch" id="chkSkill" checked /></label>
+        <label class="toggle" for="chkAutoRecording"><i class="icon record" aria-hidden="true"></i>녹화 <input type="checkbox" class="switch" id="chkAutoRecording" /></label>
+        <button type="button" class="btn-theme" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="actions">
     <p class="setup-error" id="setupError" role="alert" hidden></p>
-    <div class="actions">
-      <button id="btnShuffle" type="button">
-        <i class="icon shuffle"></i>
-        <span>섞기</span>
-      </button>
-      <div class="sep"></div>
-      <button id="btnLocal" type="button">
-        <i class="icon play"></i>
-        <span>혼자 돌리기</span>
-      </button>
-      <button id="btnCreateRoom" class="primary" type="button">공유 링크 만들기</button>
-    </div>
+    <button id="btnShuffle" type="button"><i class="icon shuffle" aria-hidden="true"></i>섞기</button>
+    <span class="sep"></span>
+    <button id="btnLocal" type="button"><i class="icon play" aria-hidden="true"></i>혼자 돌리기</button>
+    <button id="btnCreateRoom" class="primary" type="button">공유 링크 만들기</button>
   </div>
 </div>
 
-<!-- 방 모드: 같은 링크를 연 모두가 같은 레이스를 본다 -->
-<div id="roombar" class="roombar" hidden>
-  <div class="roombar-info">
+<!-- 방 화면: 같은 링크를 연 모두가 같은 레이스를 본다. 레이스 중에는 원작 설정창처럼 숨는다 -->
+<div id="roomPanel" class="panel room-panel" hidden>
+  <div class="room-head">
     <span class="room-id">방 <b id="roomId"></b></span>
-    <span id="roomCount">접속 0명</span>
-    <span id="roomSummary"></span>
-    <span id="roomNet" class="net">연결 중</span>
+    <span class="net" id="roomNet" data-state="connecting">연결 중</span>
+    <span class="viewers" id="roomCount"></span>
+    <button type="button" class="btn-theme" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
   </div>
-  <div class="roombar-actions">
-    <label class="room-record"><input type="checkbox" id="chkRoomRecord" /> 내 화면 녹화</label>
-    <button id="btnCopyLink" type="button">링크 복사</button>
-    <button id="btnCopySlack" type="button">Slack 문구 복사</button>
-    <button id="btnHostStart" class="primary" type="button" hidden>시작</button>
-    <button id="btnHostReset" type="button" hidden>다시 추첨</button>
-    <a id="lnkNewRoom" class="btn" href="./">새 추첨 만들기</a>
+  <p class="room-summary" id="roomSummary"></p>
+
+  <div class="host-share" id="hostShare" hidden>
+    <label for="shareUrl">이 링크를 Slack에 올리세요</label>
+    <div class="copyline">
+      <input type="text" id="shareUrl" readonly />
+      <button type="button" id="btnCopyLink">복사</button>
+    </div>
+    <button type="button" class="small" id="btnCopySlack">Slack 안내 문구 복사</button>
+  </div>
+
+  <p class="room-note" id="roomNote"></p>
+
+  <div class="room-actions">
+    <label class="toggle" id="roomRecordWrap" for="chkRoomRecord">내 화면 녹화 <input type="checkbox" class="switch" id="chkRoomRecord" /></label>
+    <span class="sep"></span>
+    <button type="button" class="small" id="btnCopyLinkSmall">링크 복사</button>
+    <a id="lnkNewRoom" class="btn small" href="./">새 추첨</a>
+    <button type="button" id="btnHostReset" hidden>다시 추첨</button>
+    <button type="button" id="btnHostStart" class="primary" hidden>▶ 시작</button>
   </div>
 </div>
 
+<!-- 카운트다운·따라잡기·오류 안내 -->
 <div id="overlay" class="overlay" hidden>
-  <div class="overlay-card">
+  <div class="overlay-card" role="status" aria-live="polite">
     <p class="overlay-eyebrow" id="overlayEyebrow"></p>
     <div class="overlay-big" id="overlayBig"></div>
     <p class="overlay-text" id="overlayText"></p>
+    <div class="overlay-actions" id="overlayActions" hidden>
+      <button type="button" id="btnOverlayRetry">다시 시도</button>
+      <a class="btn" href="./">새 추첨 만들기</a>
+    </div>
   </div>
 </div>
 

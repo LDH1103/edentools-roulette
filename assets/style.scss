@@ -82,554 +82,98 @@ div.copyright a {
   &.bomb {
     mask-image: url('images/bomb.svg');
   }
-
-  &.sun {
-    mask-image: url('images/sun.svg');
-  }
-
-  &.moon {
-    mask-image: url('images/moon.svg');
-  }
 }
 
-
-#settings {
-  position: fixed;
-  bottom: 1rem;
-  left: 1rem;
-  background: #666;
-  border-radius: 10px;
-  padding: 10px;
-  z-index: 999;
-  min-width: 50%;
-
-  display: flex;
-  visibility: visible;
-  opacity: 1;
-  transition: visibility 0s, opacity 1s linear;
-
-  &.hide {
-    opacity: 0;
-    visibility: hidden;
-  }
-
-  h3 {
-    padding: 0;
-    margin: 0;
-    font-size: 12pt;
-    color: #fefefe;
-  }
-
-  textarea {
-    width: 100%;
-    // 오른쪽 칼럼이 패널 높이를 결정하면 '여러명'을 열 때 범위 행(div.row, 35px)만큼
-    // 패널이 세로로 튄다. 왼쪽이 항상 더 크도록 그만큼 미리 확보해 높이를 고정한다
-    min-height: calc(5rem + 35px);
-    border: none;
-    background: #999;
-    font-size: 14pt;
-  }
-
-  button, .btn {
-    color: #fefefe;
-    background: #222;
-    border: none;
-    border-radius: 5px;
-    padding: 5px 10px;
-    position: relative;
-    display: inline-block;
-
-    &:active:after {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-    }
-  }
-
-  // <a class="btn">가 <button>과 같은 크기/모양으로 보이도록
-  a.btn {
-    text-decoration: none;
-    font-size: 10pt;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  div.theme {
-    flex-grow: 1;
-    display: flex;
-    align-items: center;
-    color: white;
-    justify-content: flex-end;
-  }
-
-  div.left {
-    flex-grow: 1;
-    flex-shrink: 1;
-    order: 1;
-
-    .actions {
-      display: flex;
-      align-items: center;
-      justify-content: stretch;
-      gap: 2px;
-
-      div.sep {
-        flex-grow: 1;
-      }
-    }
-  }
-
-  .btn-toggle-settings {
-    display: none;
-  }
-
-  div.right {
-    order: 2;
-    flex-grow: 0;
-    flex-shrink: 0;
-
-    div.row {
-      display: flex;
-      align-items: center;
-      height: 35px;
-
-      label {
-        width: 150px;
-        flex-grow: 0;
-        flex-shrink: 0;
-        padding-left: 1rem;
-        color: white;
-      }
-
-      .toggle-item {
-        width: 50%;
-        display: flex;
-        align-items: center;
-      }
-
-      // div.right div.row 와 같은 자리에 두어야 display:flex 를 이긴다
-      &.row-range {
-        display: none;
-
-        label {
-          display: none;
-        }
-
-        &.active {
-          display: flex;
-          padding-left: 150px;
-        }
-
-        .range-sep {
-          flex: 0 0 24px;
-          background: transparent;
-          color: white;
-        }
-      }
-    }
-  }
-
-  select {
-    height: 25px;
-    width: 100%;
-    border-radius: 5px;
-    background: #999;
-  }
-
-  // 맵 선택 + 받은 맵 삭제 + 맵 공유마당 바로가기
-  .map-picker {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex: 1 1 0;
-    min-width: 0;
-
-    select {
-      flex: 1 1 0;
-      min-width: 0;
-    }
-  }
-
-  .btn-map-action {
-    flex: 0 0 25px;
-    height: 25px;
-    padding: 0;
-    border: none;
-    border-radius: 5px;
-    background: #999;
-    color: #222;
-    font-size: 13px;
-    line-height: 25px;
-    text-align: center;
-    text-decoration: none;
-    cursor: pointer;
-
-    &[hidden] {
-      display: none;
-    }
-
-    &:hover {
-      background: #bbb;
-    }
-
-    // 받은 맵에 업데이트가 있다
-    &.has-update {
-      position: relative;
-
-      &::after {
-        content: '';
-        position: absolute;
-        top: -3px;
-        right: -3px;
-        width: 9px;
-        height: 9px;
-        border-radius: 50%;
-        background: #ff5a4f;
-        border: 2px solid #666;
-      }
-    }
-  }
-
-  input[type=checkbox] {
-    width: 50px;
-    display: inline-block;
-    padding-right: 63px;
-    height: 25px;
-    position: relative;
-    vertical-align: middle;
-
-    &:before {
-      position: absolute;
-      content: '';
-      display: inline-block;
-      width: 50px;
-      height: 25px;
-      border-radius: 25px;
-      background: #999;
-      top: 0;
-      left: 0;
-    }
-
-    &:after {
-      position: absolute;
-      top: 0;
-      left: 0;
-      content: '';
-      border-radius: 25px;
-      width: 25px;
-      height: 25px;
-      background: #ccc;
-      transition: transform .2s;
-    }
-
-    &:checked:after {
-      transform: translateX(100%);
-      background: white;
-    }
-
-    &:checked:before {
-      content: '';
-      background: #00baff;
-    }
-  }
-
-  .btn-group {
-    display: flex;
-    justify-content: stretch;
-    // number input의 기본 폭(~169px)이 intrinsic 폭에 들어가 오른쪽 칼럼을 넓히지 않도록
-    // width를 0으로 누르고, 대신 그룹이 행의 남는 폭을 채우게 한다
-    flex: 1 1 0;
-    min-width: 0;
-
-    & > * {
-      box-sizing: border-box;
-      flex: 1 1 0;
-      min-width: 0;
-      overflow: hidden;
-      height: 25px;
-      border-radius: 0;
-      background: #999;
-      border: none;
-      padding: 0;
-      color: #fefefe;
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      &:first-child {
-        border-radius: 10px 0 0 10px;
-      }
-
-      &:last-child {
-        border-radius: 0 10px 10px 0;
-      }
-
-      &.active:before {
-        content: '';
-        width: 15px;
-        height: 15px;
-        display: inline-block;
-        vertical-align: middle;
-        mask-image: url('images/check.svg');
-        mask-repeat: no-repeat;
-        background: white;
-      }
-
-      &.active {
-        background: #333;
-      }
-    }
-
-    input[type=number] {
-      box-sizing: border-box;
-      text-align: center;
-      width: 0;
-    }
-  }
-}
-
-
-@media screen and (max-width: 750px) {
-  #settings {
-    bottom: 60px;
-    display: block;
-    min-width: 0;
-    max-width: 100%;
-    width: calc(100% - 2rem);
-    overflow: hidden;
-    opacity: 1;
-    visibility: visible;
-    transition: visibility 0s, opacity 1s linear;
-
-    &.hide {
-      opacity: 0;
-      visibility: hidden;
-    }
-
-    .btn-toggle-settings {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      width: 100%;
-      margin-bottom: 6px;
-      cursor: pointer;
-      font-size: 11pt;
-
-      .toggle-arrow {
-        font-style: normal;
-      }
-    }
-
-    .collapsible-rows.collapsed {
-      display: none;
-    }
-
-    textarea {
-      min-height: 2.5rem;
-      font-size: 11pt;
-    }
-
-    div.right div.row {
-      height: auto;
-      display: block;
-      border-bottom: 1px solid #555;
-      padding: .5rem 0;
-
-      label {
-        width: 100%;
-        margin-bottom: .5rem;
-        padding-left: 0;
-        display: block;
-      }
-
-      &.row-toggles {
-        display: flex;
-        flex-wrap: wrap;
-
-        .toggle-item {
-          width: 50%;
-          display: flex;
-          flex-direction: column;
-          align-items: start;
-        }
-
-        label {
-          order: 0;
-          margin-bottom: .3rem;
-        }
-
-        input[type=checkbox] {
-          order: 1;
-        }
-      }
-
-      &.row-range.active {
-        display: flex;
-        padding-left: 0;
-      }
-
-      &.row-theme {
-        display: none;
-      }
-
-      .icon {
-        width: 15px;
-        height: 15px;
-      }
-    }
-  }
-
-
-
-}
-
-div.toast {
-  position: fixed;
-  transform: translate(-50%, 0);
-  padding: 8px;
-  border-radius: 4px;
-  background: #ccc;
-  overflow: hidden;
-  bottom: 10px;
-  left: 50%;
-  z-index: 1000;
-  animation: .2s linear fade-in, .2s linear 1s reverse fade-in;
-}
-
-@keyframes fade-in {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, 100%);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-
-
-
-// 맵 공유마당 브라우저 (src/mapBrowser.ts)
-
-
-
-// ---------------------------------------------------------------------------
-// 구슬 레이스 추가 UI: hidden 속성, 테마 버튼, 명단 칩, 방 상태 바, 대기/카운트다운 오버레이
-// ---------------------------------------------------------------------------
 [hidden] {
   display: none !important;
 }
 
-.btn-theme {
+// ---------------------------------------------------------------------------
+// 패널 공통: 원작 설정창과 같은 회색 카드. 한국어는 단어 단위로 줄바꿈한다
+// ---------------------------------------------------------------------------
+.panel {
   position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 1002;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.5);
-  color: white;
-  font-size: 18px;
-  cursor: pointer;
-}
+  left: 1rem;
+  bottom: 1.5rem;
+  z-index: 999;
+  max-height: calc(100% - 3rem);
+  overflow-y: auto;
+  background: #666;
+  color: #fefefe;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  visibility: visible;
+  opacity: 1;
+  transition: visibility 0s, opacity 0.6s linear;
 
-:root.light .btn-theme {
-  background: rgba(255, 255, 255, 0.7);
-  color: #222;
-}
+  &.hide {
+    opacity: 0;
+    visibility: hidden;
+    transition: visibility 0s 0.6s, opacity 0.6s linear;
+  }
 
-#settings {
-  .roster {
-    margin-top: 6px;
+  h3 {
+    margin: 0;
+    font-size: 11pt;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .hint {
+    color: #e2e2e2;
+    font-size: 9pt;
+  }
+
+  code {
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 9pt;
+    white-space: nowrap;
+  }
+
+  button,
+  .btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
     color: #fefefe;
-    font-size: 10pt;
-    display: grid;
-    gap: 6px;
+    background: #222;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font: inherit;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
 
-    .roster-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-
-      small {
-        color: #ddd;
-        margin-left: 6px;
-      }
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
     }
 
-    .roster-actions {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      align-items: center;
-
-      small {
-        color: #ddd;
-      }
-    }
-
-    .chips {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .chip {
-      font: inherit;
-      font-size: 10pt;
-      padding: 3px 10px;
-      border-radius: 999px;
-      border: 1px solid #999;
-      background: #777;
-      color: #fefefe;
-      cursor: pointer;
-
-      &[aria-pressed='true'] {
-        background: #00baff;
-        border-color: #00baff;
-        color: #111;
-      }
-    }
-
-    .roster-empty {
-      margin: 0;
-      color: #ddd;
-    }
-
-    details {
-      border: 1px solid #888;
-      border-radius: 6px;
-      padding: 6px 8px;
-
-      summary {
-        cursor: pointer;
-      }
-
-      textarea {
-        min-height: 4rem;
-        font-size: 11pt;
-        margin: 6px 0;
-      }
+    &:active:not(:disabled)::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: rgba(0, 0, 0, 0.35);
     }
   }
 
   button.small,
   .btn.small {
-    padding: 3px 8px;
-    font-size: 9.5pt;
+    padding: 4px 8px;
+    font-size: 9pt;
   }
 
   button.primary {
@@ -638,114 +182,408 @@ div.toast {
     font-weight: bold;
   }
 
-  .setup-error {
-    color: #ffb3a7;
-    margin: 4px 0 0;
-    font-size: 10pt;
+  :focus-visible {
+    outline: 2px solid #00baff;
+    outline-offset: 2px;
+  }
+
+  textarea,
+  select,
+  input[type='number'],
+  input[type='text'] {
+    font: inherit;
+    color: #111;
+    background: #999;
+    border: none;
+    border-radius: 5px;
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    padding: 6px 8px;
+    resize: vertical;
+  }
+
+  .icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .sep {
+    flex: 1 1 auto;
+  }
+}
+
+// 켜고 끄는 스위치 (원작 체크박스 모양)
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  margin: 0;
+  border-radius: 11px;
+  background: #999;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ddd;
+    transition: transform 0.2s;
+  }
+
+  &:checked {
+    background: #00baff;
+  }
+
+  &:checked::after {
+    transform: translateX(18px);
+    background: #fff;
+  }
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.panel .btn-theme {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 15px;
+}
+
+// ---------------------------------------------------------------------------
+// 설정 화면
+// ---------------------------------------------------------------------------
+#settings.panel {
+  width: min(860px, calc(100% - 2rem));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+  grid-template-areas:
+    'names options'
+    'actions actions';
+  gap: 12px 18px;
+}
+
+#settings {
+  .names {
+    grid-area: names;
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .names-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .marble-count {
+    color: #e2e2e2;
+    font-size: 9.5pt;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #in_names {
+    min-height: 5.5rem;
+    font-size: 12pt;
+  }
+
+  .roster {
+    display: grid;
+    gap: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #7a7a7a;
+  }
+
+  .roster-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .roster-title {
+    font-weight: bold;
+  }
+
+  .roster-actions,
+  .row-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    &:empty {
+      display: none;
+    }
+  }
+
+  .chip {
+    padding: 3px 10px;
+    border: 1px solid #9a9a9a;
+    border-radius: 999px;
+    background: #777;
+    color: #fefefe;
+    font-size: 9.5pt;
+
+    &[aria-pressed='true'] {
+      background: #00baff;
+      border-color: #00baff;
+      color: #111;
+    }
+  }
+
+  .roster-editor {
+    display: grid;
+    gap: 6px;
+
+    textarea {
+      min-height: 4rem;
+      font-size: 10.5pt;
+    }
+  }
+
+  .options {
+    grid-area: options;
+    min-width: 0;
+  }
+
+  .btn-toggle-settings {
+    display: none;
+  }
+
+  .collapsible-rows {
+    display: grid;
+    gap: 8px;
+  }
+
+  .opt-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .opt-label {
+    flex: 0 0 4.6em;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+
+  select {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    padding: 0 6px;
+  }
+
+  .seg {
+    flex: 1 1 auto;
+    display: flex;
+    min-width: 0;
+    border-radius: 8px;
+    overflow: hidden;
+
+    button {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 6px 4px;
+      border-radius: 0;
+      background: #8d8d8d;
+    }
+
+    button + button {
+      border-left: 1px solid #666;
+    }
+
+    button.active {
+      background: #2b2b2b;
+    }
+  }
+
+  .opt-sub {
+    flex-wrap: wrap;
+    padding-left: calc(4.6em + 8px);
+
+    input[type='number'] {
+      width: 4.5em;
+      height: 30px;
+      padding: 0 4px;
+      text-align: center;
+    }
   }
 
   .winner-summary {
-    color: #fefefe;
-    font-size: 10pt;
-    padding-left: 1rem;
+    padding-left: calc(4.6em + 8px);
+    color: #e2e2e2;
+    font-size: 9.5pt;
   }
 
-  div.right div.row.row-winner-detail {
-    padding-left: 150px;
+  .opt-toggles {
+    flex-wrap: wrap;
+    gap: 14px;
 
-    label {
-      display: none;
-    }
-
-    .range-group {
-      max-width: 220px;
+    .btn-theme {
+      margin-left: auto;
     }
   }
-}
 
-.roombar {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  right: 56px;
-  z-index: 999;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  background: rgba(40, 40, 40, 0.85);
-  color: #fefefe;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 10.5pt;
-
-  .roombar-info {
+  .actions {
+    grid-area: actions;
     display: flex;
-    gap: 12px;
     flex-wrap: wrap;
     align-items: center;
-
-    .room-id b {
-      font-family: ui-monospace, Consolas, monospace;
-      letter-spacing: 0.08em;
-    }
-
-    .net {
-      color: #9ee493;
-
-      &.offline {
-        color: #ff9c8a;
-      }
-    }
-  }
-
-  .roombar-actions {
-    display: flex;
     gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
+  }
 
-    button,
-    .btn {
-      color: #fefefe;
-      background: #222;
-      border: none;
-      border-radius: 5px;
-      padding: 6px 12px;
-      font: inherit;
-      cursor: pointer;
-      text-decoration: none;
-    }
+  .setup-error {
+    flex: 1 0 100%;
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: rgba(140, 0, 0, 0.45);
+    color: #ffe1db;
+  }
 
-    .primary {
-      background: #00baff;
-      color: #111;
-      font-weight: bold;
-    }
-
-    .room-record {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
+  #btnCreateRoom {
+    padding: 7px 16px;
   }
 }
 
-:root.light .roombar {
-  background: rgba(255, 255, 255, 0.9);
-  color: #222;
+// ---------------------------------------------------------------------------
+// 방 화면
+// ---------------------------------------------------------------------------
+#roomPanel.panel {
+  width: min(440px, calc(100% - 2rem));
+  display: grid;
+  gap: 8px;
+}
 
-  .roombar-actions button,
-  .roombar-actions .btn {
-    background: #444;
+#roomPanel {
+  .room-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+
+    .btn-theme {
+      margin-left: auto;
+    }
+  }
+
+  .room-id b {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 12pt;
+    letter-spacing: 0.08em;
+  }
+
+  .net,
+  .viewers {
+    color: #e2e2e2;
+    font-size: 9.5pt;
+    white-space: nowrap;
   }
 
   .net {
-    color: #2a8f1d;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+
+    &::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #bbb;
+    }
+
+    &[data-state='online']::before,
+    &[data-state='polling']::before {
+      background: #5ee36a;
+    }
+
+    &[data-state='reconnecting']::before {
+      background: #ffb347;
+    }
+  }
+
+  .room-summary {
+    font-weight: bold;
+  }
+
+  .host-share {
+    display: grid;
+    gap: 6px;
+
+    label {
+      font-weight: bold;
+    }
+
+    #btnCopySlack {
+      justify-self: start;
+    }
+  }
+
+  .copyline {
+    display: flex;
+    gap: 6px;
+
+    input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 32px;
+      padding: 0 8px;
+      background: #eee;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 9.5pt;
+    }
+  }
+
+  .room-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #btnHostStart {
+    padding: 8px 20px;
+    font-size: 11.5pt;
   }
 }
 
+// ---------------------------------------------------------------------------
+// 카운트다운·따라잡기·오류 카드
+// ---------------------------------------------------------------------------
 .overlay {
   position: fixed;
   inset: 0;
@@ -753,43 +591,72 @@ div.toast {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   pointer-events: none;
 
   .overlay-card {
     pointer-events: auto;
-    background: rgba(20, 20, 20, 0.82);
-    color: #fefefe;
-    border-radius: 16px;
-    padding: 24px 32px;
-    text-align: center;
-    max-width: 90vw;
-    width: 420px;
     display: grid;
     gap: 8px;
+    width: min(420px, 100%);
+    padding: 22px 28px;
+    border-radius: 16px;
+    background: rgba(20, 20, 20, 0.85);
+    color: #fefefe;
+    text-align: center;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+
+  p {
+    margin: 0;
   }
 
   .overlay-eyebrow {
-    margin: 0;
+    color: #bbb;
     font-size: 10pt;
     letter-spacing: 0.1em;
-    color: #bbb;
   }
 
   .overlay-big {
-    font-size: clamp(3rem, 12vw, 6rem);
+    font-size: clamp(2.8rem, 12vw, 5.5rem);
     font-weight: bold;
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
 
   .overlay-text {
-    margin: 0;
     font-size: 11pt;
+  }
+
+  .overlay-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+
+    button,
+    .btn {
+      padding: 7px 14px;
+      border: none;
+      border-radius: 5px;
+      background: #00baff;
+      color: #111;
+      font: inherit;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: #444;
+      color: #fefefe;
+    }
   }
 }
 
 :root.light .overlay .overlay-card {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   color: #222;
 
   .overlay-eyebrow {
@@ -797,13 +664,96 @@ div.toast {
   }
 }
 
-@media screen and (max-width: 750px) {
-  .roombar {
-    right: 10px;
-    top: 52px;
+div.toast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 1000;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #ccc;
+  color: #111;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  transform: translate(-50%, 0);
+  animation: 0.2s linear fade-in;
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -100%);
   }
 
-  #settings div.right div.row.row-winner-detail {
-    padding-left: 0;
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 좁은 화면: 패널을 화면 폭에 맞추고, 설정은 접어 둔다 (원작과 같은 방식)
+// ---------------------------------------------------------------------------
+@media screen and (max-width: 750px) {
+  #settings.panel,
+  #roomPanel.panel {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 1.6rem;
+    width: auto;
+    max-height: calc(100% - 5rem);
+    padding: 10px;
+  }
+
+  #settings.panel {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'options'
+      'names'
+      'actions';
+    gap: 10px;
+  }
+
+  #settings {
+    .btn-toggle-settings {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 12px;
+      white-space: normal;
+      text-align: left;
+    }
+
+    .toggle-arrow {
+      font-style: normal;
+    }
+
+    .collapsible-rows {
+      margin-top: 8px;
+    }
+
+    .collapsible-rows.collapsed {
+      display: none;
+    }
+
+    #in_names {
+      min-height: 3.4rem;
+      font-size: 11pt;
+    }
+
+    .opt-sub,
+    .winner-summary {
+      padding-left: 0;
+    }
+
+    #btnCreateRoom {
+      order: 10;
+      flex: 1 0 100%;
+      padding: 10px;
+      font-size: 11pt;
+    }
   }
 }
