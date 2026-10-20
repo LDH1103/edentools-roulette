@@ -2,6 +2,7 @@
 // 주최자가 방을 만들고(설정·시드), 보는 사람은 WebSocket(막히면 HTTP 폴링)으로 같은 상태를 받는다.
 // 주최자가 "시작"을 누르면 서버 시각 기준 시작 시각을 정해 모두에게 알린다.
 // 방에 Slack Incoming Webhook 이 있으면 링크·출발·결과(화면 캡처 포함)를 그 채널에 알린다.
+// 공용 저장소(SharedStore)에 명단·마지막 설정·Slack 채널을 두고 쓰는 사람 모두가 같이 쓴다.
 import { DurableObject } from 'cloudflare:workers';
 
 type WinnerSetting = { type: 'first' | 'last' | 'custom' | 'multi'; start: number; end: number };
@@ -15,11 +16,14 @@ type RoomState = RoomConfig & {
   slackChannel: string | null;
 };
 type SlackTarget = { channel: string; webhook: string };
+/** 공용 저장소의 채널. webhook 은 저장소 밖으로 내보내지 않는다 */
+type StoredChannel = { id: string; channel: string; webhook: string };
 type HostAction = 'start' | 'reset' | 'config';
 type ActionResult = { ok: true; state: RoomState } | { ok: false; status: number; message: string };
 
 type Env = {
   ROOM: DurableObjectNamespace<Room>;
+  STORE: DurableObjectNamespace<SharedStore>;
   ALLOWED_ORIGINS: string;
   /** 결과 이미지 주소에 쓰는 이 서버의 공개 주소 */
   API_ORIGIN: string;
@@ -45,6 +49,11 @@ const CARD_COLOR = { link: '#378ADD', start: '#1D9E75', result: '#EF9F27' } as c
 /** Slack 블록 글자 수 한도: header 150자, section 3000자 */
 const MAX_HEADER_CHARS = 150;
 const MAX_SECTION_CHARS = 3000;
+/** 공용 저장소에 둘 수 있는 값의 키. 클라이언트 prefs.ts 의 PREF_KEYS 와 같다 */
+const STORE_VALUE_KEYS: readonly string[] = ['er_names', 'er_roster', 'er_winner', 'er_map', 'er_slack_last'];
+/** 값 하나의 길이 한도. 이름 300줄 × 40자가 들어간다 */
+const MAX_STORE_VALUE_CHARS = 20000;
+const MAX_STORE_CHANNELS = 30;
 
 function randomToken(len: number): string {
   const bytes = new Uint8Array(len);
@@ -191,6 +200,74 @@ function validateSlack(raw: unknown, env: Env): SlackTarget | null | undefined |
   if (!isSlackWebhook(webhook, env)) return 'Slack Webhook 주소가 아닙니다. Slack 앱 설정의 Incoming Webhooks 에서 복사한 주소를 넣어 주세요';
   const channel = (typeof s.channel === 'string' ? s.channel.trim() : '').slice(0, 40) || 'Slack';
   return { channel, webhook };
+}
+
+/** 공용 저장소. 사내 몇 명이 같이 쓰므로 하나만 둔다 */
+function storeStub(env: Env) {
+  return env.STORE.get(env.STORE.idFromName('shared'));
+}
+
+/** 공용 저장소에 요청을 넘기고 CORS 헤더를 붙여 돌려준다 */
+async function forwardToStore(env: Env, action: string, payload: object, cors: Record<string, string>): Promise<Response> {
+  const res = await storeStub(env).fetch(`https://store/${action}`, { method: 'POST', body: JSON.stringify(payload) });
+  return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers), ...cors } });
+}
+
+/** 공용 저장소에 둘 값 검증: 정해 둔 키의 문자열만 받고(null 은 지우기), 모르는 키는 버린다 */
+function validateStoreValues(raw: unknown): Record<string, string | null> | string {
+  if (!raw || typeof raw !== 'object') return '저장할 값이 없습니다';
+  const out: Record<string, string | null> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!STORE_VALUE_KEYS.includes(key)) continue;
+    if (value !== null && typeof value !== 'string') return '저장할 값의 모양이 잘못됐습니다';
+    if (typeof value === 'string' && value.length > MAX_STORE_VALUE_CHARS) return '저장할 값이 너무 큽니다';
+    out[key] = value;
+  }
+  return out;
+}
+
+/** 브라우저에서 옮겨 온 채널 목록. Slack 주소 형식이 맞는 것만 받고, 같은 이름은 나중 것이 이긴다 */
+function validateImportChannels(raw: unknown, env: Env): SlackTarget[] {
+  const byName = new Map<string, SlackTarget>();
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const target = validateSlack(item, env);
+    // 형식이 맞는 채널 여부
+    const isTarget = typeof target === 'object' && target !== null;
+    if (isTarget) byName.set(target.channel, target);
+  }
+  return [...byName.values()].slice(0, MAX_STORE_CHANNELS);
+}
+
+/** 명단 두 개(JSON 배열 문자열)를 처음 나온 순서대로 합친다. 깨진 값은 빈 명단으로 본다 */
+function mergeRoster(current: string | undefined, incoming: string): string {
+  const parse = (value: string | undefined): string[] => {
+    try {
+      const v = JSON.parse(value ?? '[]');
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  };
+  return JSON.stringify([...new Set([...parse(current), ...parse(incoming)])].slice(0, MAX_NAMES));
+}
+
+/**
+ * 방에 붙일 알림 채널을 Webhook 주소가 있는 모양으로 바꾼다.
+ * 공용 채널({ channel, channelId })이면 공용 저장소에서 주소를 꺼내고,
+ * 그 밖의 값(예전 화면이 보내는 { channel, webhook } 등)은 그대로 돌려 validateSlack 에 맡긴다.
+ */
+async function resolveStoredSlack(raw: unknown, env: Env): Promise<{ slack: unknown } | { error: string }> {
+  // 공용 채널 선택 여부
+  const isStoredChoice = !!raw && typeof raw === 'object' && 'channelId' in raw;
+  if (!isStoredChoice) return { slack: raw };
+  const { channelId } = raw as { channelId?: unknown };
+  const res = await storeStub(env).fetch('https://store/secret', {
+    method: 'POST',
+    body: JSON.stringify({ channelId: String(channelId ?? '') }),
+  });
+  const data = (await res.json()) as { channel?: string; webhook?: string; error?: string };
+  if (!res.ok) return { error: data.error ?? '알림 채널을 찾을 수 없습니다' };
+  return { slack: { channel: data.channel, webhook: data.webhook } };
 }
 
 async function postSlack(webhook: string, payload: object): Promise<{ ok: true } | { ok: false; message: string }> {
@@ -556,6 +633,88 @@ export class Room extends DurableObject<Env> {
   }
 }
 
+/**
+ * 공용 저장소. 사이트 전체에 하나만 있고, 쓰는 사람 모두가 명단·마지막 설정(values)과 Slack 채널을 같이 쓴다.
+ * 채널의 Webhook 주소는 워커가 방에 붙일 때만 꺼내고 화면에는 내보내지 않는다.
+ * 워커가 검증을 마친 값만 넘기므로 여기서는 저장만 한다.
+ */
+export class SharedStore extends DurableObject<Env> {
+  private async values(): Promise<Record<string, string>> {
+    return (await this.ctx.storage.get<Record<string, string>>('values')) ?? {};
+  }
+
+  private async channels(): Promise<StoredChannel[]> {
+    return (await this.ctx.storage.get<StoredChannel[]>('channels')) ?? [];
+  }
+
+  /** 화면에 보낼 모양: 채널은 id·이름만 */
+  private async view() {
+    const channels = (await this.channels()).map(({ id, channel }) => ({ id, channel }));
+    return { values: await this.values(), channels };
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const action = new URL(request.url).pathname.replace(/^\/+/, '');
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+
+    switch (action) {
+      case 'load':
+        return json(await this.view());
+      case 'values': {
+        // 받은 키만 바꾸고 null 은 지운다. 다른 키는 그대로 둔다
+        const values = await this.values();
+        for (const [key, value] of Object.entries(body.values as Record<string, string | null>)) {
+          if (value === null) delete values[key];
+          else values[key] = value;
+        }
+        await this.ctx.storage.put('values', values);
+        return json({ ok: true });
+      }
+      case 'import': {
+        // 예전에 브라우저에 저장한 값 옮기기: 명단은 합치고, 다른 값과 같은 이름의 채널은 이미 있으면 그대로 둔다
+        const values = await this.values();
+        for (const [key, value] of Object.entries(body.values as Record<string, string>)) {
+          if (key === 'er_roster') values[key] = mergeRoster(values[key], value);
+          else values[key] ??= value;
+        }
+        const channels = await this.channels();
+        const known = new Set(channels.map((c) => c.channel));
+        for (const target of body.channels as SlackTarget[]) {
+          // 처음 보는 채널이고 한도 안 여부
+          const canAdd = !known.has(target.channel) && channels.length < MAX_STORE_CHANNELS;
+          if (canAdd) channels.push({ id: randomToken(8), ...target });
+        }
+        await this.ctx.storage.put({ values, channels });
+        return json(await this.view());
+      }
+      case 'channels/add': {
+        const target = body as SlackTarget;
+        // 같은 이름으로 다시 넣으면 주소를 바꾼다
+        const others = (await this.channels()).filter((c) => c.channel !== target.channel);
+        // 채널 수 한도 도달 여부
+        const isFull = others.length >= MAX_STORE_CHANNELS;
+        if (isFull) return json({ error: `채널은 ${MAX_STORE_CHANNELS}개까지입니다` }, 400);
+        const added = { id: randomToken(8), channel: target.channel, webhook: target.webhook };
+        await this.ctx.storage.put('channels', [...others, added]);
+        return json({ channels: (await this.view()).channels });
+      }
+      case 'channels/remove': {
+        const left = (await this.channels()).filter((c) => c.id !== body.id);
+        await this.ctx.storage.put('channels', left);
+        return json({ channels: (await this.view()).channels });
+      }
+      case 'secret': {
+        // 워커만 부른다: 방에 붙일 채널의 주소
+        const found = (await this.channels()).find((c) => c.id === body.channelId);
+        if (!found) return json({ error: '알림 채널을 찾을 수 없습니다. 설정에서 알림 채널을 다시 골라 주세요' }, 404);
+        return json({ channel: found.channel, webhook: found.webhook });
+      }
+      default:
+        return json({ error: 'not found' }, 404);
+    }
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const cors = corsHeaders(request, env);
@@ -576,6 +735,47 @@ export default {
       return sent.ok ? json({ ok: true }, 200, cors) : json({ error: sent.message }, 502, cors);
     }
 
+    // GET /store : 공용 저장값. 채널은 이름·id 만 내보낸다
+    if (parts[0] === 'store' && parts.length === 1 && request.method === 'GET') {
+      return forwardToStore(env, 'load', {}, cors);
+    }
+
+    // POST /store/values|import|channels/add|channels/remove : 저장소에는 워커가 검증한 값만 넘긴다. secret 은 밖에서 부를 수 없다
+    if (parts[0] === 'store' && request.method === 'POST') {
+      const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+      const action = parts.slice(1).join('/');
+      let payload: object;
+      switch (action) {
+        case 'values': {
+          const values = validateStoreValues(body?.values);
+          if (typeof values === 'string') return json({ error: values }, 400, cors);
+          payload = { values };
+          break;
+        }
+        case 'import': {
+          const values = validateStoreValues(body?.values ?? {});
+          if (typeof values === 'string') return json({ error: values }, 400, cors);
+          // 옮기는 값에서 지우기(null)는 뺀다
+          const kept = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null));
+          payload = { values: kept, channels: validateImportChannels(body?.channels, env) };
+          break;
+        }
+        case 'channels/add': {
+          const target = validateSlack(body?.target ?? null, env);
+          if (typeof target === 'string') return json({ error: target }, 400, cors);
+          if (!target) return json({ error: 'Webhook 주소가 없습니다' }, 400, cors);
+          payload = target;
+          break;
+        }
+        case 'channels/remove':
+          payload = { id: String(body?.id ?? '') };
+          break;
+        default:
+          return json({ error: 'not found' }, 404, cors);
+      }
+      return forwardToStore(env, action, payload, cors);
+    }
+
     if (parts[0] !== 'rooms') return json({ error: 'not found' }, 404, cors);
 
     // POST /rooms : 방 만들기. 아이디가 겹치면(드물다) 다시 뽑는다
@@ -583,7 +783,9 @@ export default {
       const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
       const config = validateConfig(body);
       if (typeof config === 'string') return json({ error: config }, 400, cors);
-      const slack = validateSlack(body?.slack ?? null, env);
+      const resolved = await resolveStoredSlack(body?.slack ?? null, env);
+      if ('error' in resolved) return json({ error: resolved.error }, 400, cors);
+      const slack = validateSlack(resolved.slack, env);
       if (typeof slack === 'string') return json({ error: slack }, 400, cors);
       for (let attempt = 0; attempt < 3; attempt++) {
         const id = randomToken(6);
@@ -610,7 +812,19 @@ export default {
         (request.method === 'POST' && ['start', 'reset', 'config', 'notify', 'result'].includes(action));
       if (!routeOk || !/^[A-Z2-9]{6}$/.test(id)) return json({ error: 'not found' }, 404, cors);
       const stub = env.ROOM.get(env.ROOM.idFromName(id));
-      const res = await stub.fetch(`https://room/${action}`, request);
+      // 설정 수정에서 공용 채널을 고르면 방에 넘기기 전에 Webhook 주소로 바꾼다
+      let forward = request;
+      if (request.method === 'POST' && action === 'config') {
+        const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+        const resolved = await resolveStoredSlack(body?.slack, env);
+        if ('error' in resolved) return json({ error: resolved.error }, 400, cors);
+        forward = new Request(request.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ...body, slack: resolved.slack }),
+        });
+      }
+      const res = await stub.fetch(`https://room/${action}`, forward);
       if (res.status === 101) return res;
       return new Response(res.body, { status: res.status, headers: { ...Object.fromEntries(res.headers), ...cors } });
     }

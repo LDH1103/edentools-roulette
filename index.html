@@ -30,6 +30,12 @@
   <section class="names" aria-label="참가자">
     <div class="names-head">
       <h3><label for="in_names">참가자</label></h3>
+      <span class="repeat-all">
+        <label for="in_repeat">모두</label>
+        <input type="number" id="in_repeat" value="2" min="1" max="100" inputmode="numeric" />
+        <span>번씩</span>
+        <button type="button" class="small" id="btnRepeatAll">넣기</button>
+      </span>
       <span class="marble-count" id="marbleCount"></span>
     </div>
     <p class="hint">쉼표나 줄바꿈으로 구분합니다. <code>이름*2</code>는 구슬 2개, <code>이름/3</code>은 가중치 3입니다.</p>
@@ -51,7 +57,7 @@
         <div class="row-buttons">
           <button type="button" class="small" id="rosterSave">명단 저장</button>
           <button type="button" class="small" id="rosterFromNames">지금 참가자 가져오기</button>
-          <span class="hint">이 브라우저에만 저장됩니다.</span>
+          <span class="hint">서버에 저장되어 같이 씁니다.</span>
         </div>
       </div>
     </div>
@@ -181,7 +187,7 @@
       <button type="button" id="btnSlackCancel">취소</button>
       <button type="submit" class="primary" id="btnSlackSave">저장</button>
     </div>
-    <p class="field-help">주소는 이 브라우저와 구슬 레이스 서버에만 보관하고, 링크를 연 다른 사람에게는 보내지 않습니다.</p>
+    <p class="field-help">채널 목록은 서버에 저장되어 같이 씁니다. 주소는 서버에만 보관하고 화면에는 채널 이름만 보입니다.</p>
   </form>
 </dialog>
 

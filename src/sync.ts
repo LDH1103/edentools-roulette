@@ -33,6 +33,15 @@ export type RoomState = RoomConfig & {
 /** 주최자 브라우저에 저장해 두고 추첨마다 고르는 Slack 알림 대상 */
 export type SlackTarget = { channel: string; webhook: string };
 
+/** 공용 저장소의 Slack 채널. Webhook 주소는 서버에만 있고 화면은 id 로 고른다 */
+export type SharedChannel = { id: string; channel: string };
+
+/** 방에 붙일 알림 채널: 공용 채널. 서버가 id 로 Webhook 주소를 찾아 붙인다 */
+export type SlackChoice = { channel: string; channelId: string };
+
+/** 공용 저장소의 값. values 는 prefs.ts 의 PREF_KEYS 별 문자열 */
+export type SharedPrefs = { values: Record<string, string>; channels: SharedChannel[] };
+
 /** connecting: 처음 붙는 중, online: 실시간, polling: WebSocket 대신 주기 조회, reconnecting: 끊겨서 다시 붙는 중 */
 export type ConnState = 'connecting' | 'online' | 'polling' | 'reconnecting';
 
@@ -72,7 +81,7 @@ async function failFrom(res: Response): Promise<never> {
 export async function createRoom(
   apiBase: string,
   config: RoomConfig,
-  slack: SlackTarget | null
+  slack: SlackChoice | null
 ): Promise<{ id: string; hostKey: string; state: RoomState }> {
   const res = await fetch(`${apiBase}/rooms`, {
     method: 'POST',
@@ -91,6 +100,51 @@ export async function testSlackHook(apiBase: string, target: SlackTarget): Promi
     body: JSON.stringify(target),
   });
   if (!res.ok) return failFrom(res);
+}
+
+async function storePost<T>(apiBase: string, path: string, body: object, keepalive = false): Promise<T> {
+  const res = await fetch(`${apiBase}/store${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    keepalive,
+  });
+  if (!res.ok) return failFrom(res);
+  return res.json();
+}
+
+/** 공용 저장값을 받는다 */
+export async function loadShared(apiBase: string): Promise<SharedPrefs> {
+  const res = await fetch(`${apiBase}/store`);
+  if (!res.ok) return failFrom(res);
+  return res.json();
+}
+
+/** 예전에 이 브라우저에 저장한 값과 채널을 공용 저장소로 옮긴다. 명단은 합치고 나머지는 서버 값이 없을 때만 들어간다 */
+export function importToShared(
+  apiBase: string,
+  values: Record<string, string>,
+  channels: SlackTarget[]
+): Promise<SharedPrefs> {
+  return storePost(apiBase, '/import', { values, channels });
+}
+
+/** 바뀐 값만 보낸다(null 은 지우기). 페이지를 떠날 때는 keepalive 로 보낸다 */
+export async function saveSharedValues(
+  apiBase: string,
+  values: Record<string, string | null>,
+  keepalive = false
+): Promise<void> {
+  await storePost(apiBase, '/values', { values }, keepalive);
+}
+
+/** 공용 채널을 추가한다. 같은 이름이면 주소를 바꾼다 */
+export async function addSharedChannel(apiBase: string, target: SlackTarget): Promise<SharedChannel[]> {
+  return (await storePost<{ channels: SharedChannel[] }>(apiBase, '/channels/add', { target })).channels;
+}
+
+export async function removeSharedChannel(apiBase: string, id: string): Promise<SharedChannel[]> {
+  return (await storePost<{ channels: SharedChannel[] }>(apiBase, '/channels/remove', { id })).channels;
 }
 
 export class RoomClient {
@@ -182,7 +236,7 @@ export class RoomClient {
   }
 
   /** 같은 링크에서 설정을 바꾼다. 서버가 새 시드로 대기 상태를 만들어 모두에게 알린다 */
-  async updateConfig(key: string, config: RoomConfig, slack: SlackTarget | null): Promise<void> {
+  async updateConfig(key: string, config: RoomConfig, slack: SlackChoice | null): Promise<void> {
     await this.post('config', { key, config, slack });
   }
 

@@ -298,6 +298,22 @@ div.copyright a {
     gap: 8px;
   }
 
+  .repeat-all {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9.5pt;
+    white-space: nowrap;
+
+    input[type='number'] {
+      width: 4em;
+      height: 26px;
+      padding: 0 2px;
+      text-align: center;
+    }
+  }
+
   .marble-count {
     color: #e2e2e2;
     font-size: 9.5pt;
@@ -407,6 +423,7 @@ div.copyright a {
     height: 30px;
     padding: 0 6px;
   }
+
 
   .seg {
     flex: 1 1 auto;
@@ -749,6 +766,7 @@ div.copyright a {
   .field-label {
     font-weight: bold;
   }
+
 
   .field-help {
     margin: 0;
