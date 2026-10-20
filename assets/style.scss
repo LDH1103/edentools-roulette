@@ -465,19 +465,6 @@ div.copyright a {
     font-size: 13pt;
   }
 
-  .slack-add {
-    input {
-      flex: 1 1 100%;
-      min-width: 0;
-      height: 30px;
-      padding: 0 8px;
-    }
-
-    .row-buttons a {
-      color: #e2e2e2;
-    }
-  }
-
   .actions {
     grid-area: actions;
     display: flex;
@@ -570,6 +557,10 @@ div.copyright a {
     font-weight: bold;
   }
 
+  .nowrap {
+    white-space: nowrap;
+  }
+
   .host-share {
     display: grid;
     gap: 6px;
@@ -615,6 +606,180 @@ div.copyright a {
   #btnHostStart {
     padding: 8px 20px;
     font-size: 11.5pt;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Slack 알림 채널 추가 창
+// ---------------------------------------------------------------------------
+.dialog {
+  width: min(460px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: #5e5e5e;
+  color: #fefefe;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+
+  &::backdrop {
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  .dialog-body {
+    display: grid;
+    gap: 14px;
+    padding: 16px 18px;
+  }
+
+  .dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+
+    h2 {
+      margin: 0;
+      font-size: 13pt;
+    }
+  }
+
+  button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    border: none;
+    border-radius: 6px;
+    background: #222;
+    color: #fefefe;
+    font: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    &.primary {
+      background: #00baff;
+      color: #111;
+      font-weight: bold;
+    }
+  }
+
+  .dialog-close {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  :focus-visible {
+    outline: 2px solid #00baff;
+    outline-offset: 2px;
+  }
+
+  .guide {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+
+    summary {
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    ol {
+      display: grid;
+      gap: 4px;
+      margin: 8px 0 2px;
+      padding-left: 1.3em;
+    }
+
+    a {
+      color: #9fdcff;
+    }
+  }
+
+  .field {
+    display: grid;
+    gap: 4px;
+
+    input {
+      width: 100%;
+      height: 36px;
+      padding: 0 10px;
+      border: 2px solid transparent;
+      border-radius: 6px;
+      background: #eee;
+      color: #111;
+      font: inherit;
+    }
+
+    input[type='url'] {
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 9.5pt;
+    }
+
+    &.valid input {
+      border-color: #5ee36a;
+    }
+
+    &.invalid input {
+      border-color: #ff8a7a;
+    }
+
+    &.valid .field-help {
+      color: #b9f5bf;
+    }
+
+    &.invalid .field-help {
+      color: #ffd0c8;
+    }
+  }
+
+  .field-label {
+    font-weight: bold;
+  }
+
+  .field-help {
+    margin: 0;
+    color: #e2e2e2;
+    font-size: 9pt;
+  }
+
+  .dialog-status {
+    margin: 0;
+    padding: 7px 10px;
+    border-radius: 6px;
+
+    &.ok {
+      background: rgba(46, 160, 67, 0.4);
+    }
+
+    &.error {
+      background: rgba(140, 0, 0, 0.5);
+      color: #ffe1db;
+    }
+  }
+
+  .dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+
+    .sep {
+      flex: 1 1 auto;
+    }
   }
 }
 

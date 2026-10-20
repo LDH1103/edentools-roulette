@@ -507,6 +507,18 @@ export default {
     const url = new URL(request.url);
     const parts = url.pathname.split('/').filter(Boolean);
 
+    // POST /slack/test : 채널을 저장하기 전에 Webhook 주소가 맞는지 확인 메시지를 보내 본다
+    if (parts[0] === 'slack' && parts[1] === 'test' && parts.length === 2 && request.method === 'POST') {
+      const body = await request.json().catch(() => null);
+      const target = validateSlack(body ?? null, env);
+      if (typeof target === 'string') return json({ error: target }, 400, cors);
+      if (!target) return json({ error: 'Webhook 주소가 없습니다' }, 400, cors);
+      const sent = await postSlack(target.webhook, {
+        text: `✅ 구슬 레이스 알림이 연결됐습니다. 앞으로 ${target.channel} 추첨의 링크·출발·결과를 이 채널로 보냅니다.`,
+      });
+      return sent.ok ? json({ ok: true }, 200, cors) : json({ error: sent.message }, 502, cors);
+    }
+
     if (parts[0] !== 'rooms') return json({ error: 'not found' }, 404, cors);
 
     // POST /rooms : 방 만들기. 아이디가 겹치면(드물다) 다시 뽑는다

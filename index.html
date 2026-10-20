@@ -94,16 +94,8 @@
       <div class="opt-row">
         <label class="opt-label" for="sltSlack"><span class="slack-mark" aria-hidden="true">#</span>알림</label>
         <select id="sltSlack"></select>
+        <button type="button" class="small" id="btnSlackAdd">추가</button>
         <button type="button" class="small" id="btnSlackRemove" hidden>삭제</button>
-      </div>
-      <div class="opt-sub slack-add" id="slackAdd" hidden>
-        <input type="text" id="slackChannelName" maxlength="40" placeholder="채널 이름 (예: #점심)" aria-label="채널 이름" />
-        <input type="url" id="slackWebhook" spellcheck="false" placeholder="Slack Incoming Webhook 주소" aria-label="Slack Webhook 주소" />
-        <div class="row-buttons">
-          <button type="button" class="small" id="btnSlackSave">추가</button>
-          <button type="button" class="small" id="btnSlackCancel">취소</button>
-          <a class="hint" href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Webhook 주소 만드는 법</a>
-        </div>
       </div>
       <p class="winner-summary" id="slackSummary" hidden>링크·출발·결과(화면 캡처 포함)를 이 채널에 알립니다.</p>
     </div>
@@ -123,7 +115,7 @@
 
 <!-- 방 화면: 같은 링크를 연 모두가 같은 레이스를 본다. 레이스 중에는 원작 설정창처럼 숨는다 -->
 <div id="roomPanel" class="panel room-panel" hidden>
-  <div class="room-head">
+  <div class="room-head" id="roomHead">
     <span class="room-id">방 <b id="roomId"></b></span>
     <span class="net" id="roomNet" data-state="connecting">연결 중</span>
     <span class="viewers" id="roomCount"></span>
@@ -155,6 +147,43 @@
     <button type="button" id="btnHostStart" class="primary" hidden>▶ 시작</button>
   </div>
 </div>
+
+<!-- Slack 알림 채널 추가 -->
+<dialog id="slackDialog" class="dialog" aria-labelledby="slackDialogTitle">
+  <form class="dialog-body" id="slackForm" novalidate>
+    <div class="dialog-head">
+      <h2 id="slackDialogTitle">Slack 알림 채널 추가</h2>
+      <button type="button" class="dialog-close" id="btnSlackClose" aria-label="닫기">✕</button>
+    </div>
+    <details class="guide" id="slackGuide">
+      <summary>Webhook 주소 만드는 법</summary>
+      <ol>
+        <li><a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a> 에서 <b>Create New App → From scratch</b>로 앱을 만듭니다.</li>
+        <li>왼쪽 메뉴 <b>Incoming Webhooks</b>에서 <b>Activate Incoming Webhooks</b>를 켭니다.</li>
+        <li><b>Add New Webhook to Workspace</b>를 누르고 채널을 고른 뒤 허용합니다. 회사 워크스페이스는 관리자 승인이 필요할 수 있습니다.</li>
+        <li>생긴 주소 옆 <b>Copy</b>를 눌러 아래 칸에 붙여 넣습니다.</li>
+      </ol>
+    </details>
+    <div class="field">
+      <label class="field-label" for="slackChannelName">채널 이름</label>
+      <input type="text" id="slackChannelName" maxlength="40" placeholder="#점심-추첨" autocomplete="off" />
+      <span class="field-help">알림 목록에 보일 이름입니다. Slack 채널 이름과 같게 적으면 헷갈리지 않습니다.</span>
+    </div>
+    <div class="field" id="slackWebhookField">
+      <label class="field-label" for="slackWebhook">Webhook 주소</label>
+      <input type="url" id="slackWebhook" spellcheck="false" autocomplete="off" placeholder="https://hooks.slack.com/services/…" aria-describedby="slackWebhookHelp" />
+      <span class="field-help" id="slackWebhookHelp">Slack 에서 복사한 주소를 그대로 붙여 넣으세요.</span>
+    </div>
+    <p class="dialog-status" id="slackStatus" role="status" hidden></p>
+    <div class="dialog-actions">
+      <button type="button" id="btnSlackTest">테스트 보내기</button>
+      <span class="sep"></span>
+      <button type="button" id="btnSlackCancel">취소</button>
+      <button type="submit" class="primary" id="btnSlackSave">저장</button>
+    </div>
+    <p class="field-help">주소는 이 브라우저와 구슬 레이스 서버에만 보관하고, 링크를 연 다른 사람에게는 보내지 않습니다.</p>
+  </form>
+</dialog>
 
 <!-- 카운트다운·따라잡기·오류 안내 -->
 <div id="overlay" class="overlay" hidden>

@@ -83,6 +83,16 @@ export async function createRoom(
   return res.json();
 }
 
+/** 채널을 저장하기 전에 확인 메시지를 보내 Webhook 주소가 맞는지 본다 */
+export async function testSlackHook(apiBase: string, target: SlackTarget): Promise<void> {
+  const res = await fetch(`${apiBase}/slack/test`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(target),
+  });
+  if (!res.ok) return failFrom(res);
+}
+
 export class RoomClient {
   private ws: WebSocket | null = null;
   private closed = false;

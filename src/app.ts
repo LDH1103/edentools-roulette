@@ -12,6 +12,7 @@ import {
   type RoomConfig,
   type RoomState,
   type SlackTarget,
+  testSlackHook,
   type WinnerSetting,
 } from './sync';
 
@@ -33,7 +34,6 @@ const RESULT_PANEL_DELAY_MS = 2500;
 const RESULT_CAPTURE_DELAY_MS = 1500;
 const SLACK_HOOKS_KEY = 'er_slack_hooks';
 const SLACK_LAST_KEY = 'er_slack_last';
-const SLACK_ADD = '__add';
 
 function $<T extends HTMLElement = HTMLElement>(selector: string): T {
   const el = document.querySelector<T>(selector);
@@ -487,9 +487,13 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   });
 
   // ----- Slack 알림 채널: Webhook 주소를 채널 이름과 함께 이 브라우저에 저장해 두고 추첨마다 고른다 -----
-  const slackAdd = $('#slackAdd');
+  const slackDialog = $<HTMLDialogElement>('#slackDialog');
   const slackName = $<HTMLInputElement>('#slackChannelName');
   const slackUrl = $<HTMLInputElement>('#slackWebhook');
+  const slackUrlField = $('#slackWebhookField');
+  const slackUrlHelp = $('#slackWebhookHelp');
+  const slackStatus = $('#slackStatus');
+  const slackTestBtn = $<HTMLButtonElement>('#btnSlackTest');
   const slackRemove = $('#btnSlackRemove');
 
   function getSlack(): SlackTarget | null {
@@ -509,49 +513,89 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   function renderSlack(selectedChannel: string | null) {
     slackSelect.replaceChildren(
       new Option('보내지 않음', ''),
-      ...slackHooks.map((h, i) => new Option(h.channel, String(i))),
-      new Option('+ 채널 추가…', SLACK_ADD)
+      ...slackHooks.map((h, i) => new Option(h.channel, String(i)))
     );
     const index = selectedChannel === null ? -1 : slackHooks.findIndex((h) => h.channel === selectedChannel);
     slackSelect.value = index >= 0 ? String(index) : '';
     syncSlackControls();
   }
 
-  slackSelect.addEventListener('change', () => {
-    if (slackSelect.value === SLACK_ADD) {
-      slackSelect.value = '';
-      slackAdd.hidden = false;
-      slackName.focus();
-    }
-    syncSlackControls();
-  });
-  $('#btnSlackCancel').addEventListener('click', () => {
-    slackAdd.hidden = true;
-    showError(null);
-  });
-  $('#btnSlackSave').addEventListener('click', () => {
-    const webhook = slackUrl.value.trim();
+  /** 입력 중인 Webhook 주소 모양을 칸 아래에 바로 알려 준다. showEmpty 면 빈 칸도 오류로 본다 */
+  function checkWebhookInput(showEmpty = false): boolean {
+    const value = slackUrl.value.trim();
     // 로컬 개발에서는 가짜 Slack 서버(127.0.0.1)로도 시험할 수 있다
-    const isHook =
-      /^https:\/\/hooks\.slack\.com\/services\//.test(webhook) ||
-      (IS_LOCAL && /^http:\/\/127\.0\.0\.1:\d+\//.test(webhook));
-    if (!isHook) {
-      showError(
-        'Slack Webhook 주소는 https://hooks.slack.com/services/ 로 시작합니다. Slack 앱의 Incoming Webhooks 에서 복사하세요.'
-      );
-      return;
-    }
-    const channel = slackName.value.trim().slice(0, 40) || '알림 채널';
-    // 같은 이름으로 다시 넣으면 주소를 바꾼다
-    slackHooks = [...slackHooks.filter((h) => h.channel !== channel), { channel, webhook }];
-    storageSet(SLACK_HOOKS_KEY, JSON.stringify(slackHooks));
+    const looksRight =
+      /^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_\-/]+$/.test(value) ||
+      (IS_LOCAL && /^http:\/\/127\.0\.0\.1:\d+\//.test(value));
+    const showError = !looksRight && (value !== '' || showEmpty);
+    slackUrlField.classList.toggle('valid', looksRight);
+    slackUrlField.classList.toggle('invalid', showError);
+    if (looksRight) slackUrlHelp.textContent = '✓ Slack Webhook 주소 형식입니다.';
+    else if (showError) slackUrlHelp.textContent = 'https://hooks.slack.com/services/ 로 시작하는 주소여야 합니다.';
+    else slackUrlHelp.textContent = 'Slack 에서 복사한 주소를 그대로 붙여 넣으세요.';
+    return looksRight;
+  }
+
+  function setSlackStatus(kind: 'ok' | 'error' | null, message = '') {
+    slackStatus.hidden = kind === null;
+    slackStatus.className = `dialog-status ${kind ?? ''}`;
+    slackStatus.textContent = message;
+  }
+
+  /** 입력값으로 만든 알림 대상. 채널 이름을 비우면 '알림 채널' 로 저장한다 */
+  function draftTarget(): SlackTarget {
+    return { channel: slackName.value.trim().slice(0, 40) || '알림 채널', webhook: slackUrl.value.trim() };
+  }
+
+  $('#btnSlackAdd').addEventListener('click', () => {
     slackName.value = '';
     slackUrl.value = '';
-    slackAdd.hidden = true;
-    showError(null);
-    renderSlack(channel);
-    toast(`${channel} 채널을 저장했습니다.`);
+    checkWebhookInput();
+    setSlackStatus(null);
+    // 처음 추가하는 사람에게는 만드는 법을 펼쳐 둔다
+    $<HTMLDetailsElement>('#slackGuide').open = slackHooks.length === 0;
+    slackDialog.showModal();
+    slackName.focus();
   });
+  slackUrl.addEventListener('input', () => {
+    checkWebhookInput();
+    setSlackStatus(null);
+  });
+  $('#btnSlackClose').addEventListener('click', () => slackDialog.close());
+  $('#btnSlackCancel').addEventListener('click', () => slackDialog.close());
+  slackTestBtn.addEventListener('click', async () => {
+    if (!checkWebhookInput(true)) {
+      slackUrl.focus();
+      return;
+    }
+    const target = draftTarget();
+    slackTestBtn.disabled = true;
+    slackTestBtn.textContent = '보내는 중…';
+    try {
+      await testSlackHook(API_BASE, target);
+      setSlackStatus('ok', `✓ ${target.channel}에 확인 메시지를 보냈습니다. Slack 에서 받았는지 확인해 보세요.`);
+    } catch (e) {
+      setSlackStatus('error', `보내지 못했습니다. ${friendlyError(e)}`);
+    } finally {
+      slackTestBtn.disabled = false;
+      slackTestBtn.textContent = '테스트 보내기';
+    }
+  });
+  $('#slackForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!checkWebhookInput(true)) {
+      slackUrl.focus();
+      return;
+    }
+    const target = draftTarget();
+    // 같은 이름으로 다시 넣으면 주소를 바꾼다
+    slackHooks = [...slackHooks.filter((h) => h.channel !== target.channel), target];
+    storageSet(SLACK_HOOKS_KEY, JSON.stringify(slackHooks));
+    slackDialog.close();
+    renderSlack(target.channel);
+    toast(`${target.channel} 채널을 저장했습니다. 이 추첨의 알림 채널로 골라 두었습니다.`, 3000);
+  });
+  slackSelect.addEventListener('change', syncSlackControls);
   slackRemove.addEventListener('click', () => {
     const chosen = getSlack();
     if (!chosen || !window.confirm(`${chosen.channel} 채널을 목록에서 지울까요?`)) return;
@@ -601,7 +645,6 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     options.useSkills = config.useSkills;
     chkSkill.checked = config.useSkills;
     winner = normalizeWinner(config.winner);
-    slackAdd.hidden = true;
     renderSlack(slackChannel);
     getReady();
     showError(null);
@@ -702,6 +745,11 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
   $<HTMLInputElement>('#shareUrl').value = shareUrl;
   roulette.setAutoRecording(false);
   chkRecord.checked = false;
+  // 방에서는 모두 같은 시계를 따르므로 캔버스를 눌러도 빨리 감기 아이콘이 뜨지 않게 한다
+  roulette.setFastForwardAllowed(false);
+  // 보는 사람 화면은 보기만: 새 추첨·테마 같은 버튼을 두지 않는다
+  $('#lnkNewRoom').hidden = !isHost;
+  $<HTMLElement>('#roomPanel .btn-theme').hidden = !isHost;
 
   function showOverlay(eyebrowText: string, bigText: string, bodyText: string, withActions = false) {
     overlay.hidden = false;
@@ -757,7 +805,15 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     roulette.setMap(s.map);
     roulette.setMarbles(s.names, s.seed);
     applyWinnerSetting(roulette, s.winner);
-    $('#roomSummary').textContent = `${summaryText(s)}${s.slackChannel ? ` · 알림 ${s.slackChannel}` : ''}`;
+    const summaryEl = $('#roomSummary');
+    summaryEl.textContent = summaryText(s);
+    // 알림 채널은 주최자에게만 보인다. "#채널" 이 중간에서 줄바꿈되지 않게 묶는다
+    if (isHost && s.slackChannel) {
+      const tag = document.createElement('span');
+      tag.className = 'nowrap';
+      tag.textContent = `알림 ${s.slackChannel}`;
+      summaryEl.append(' · ', tag);
+    }
     const notifyBtn = $('#btnSlackNotify');
     notifyBtn.textContent = s.slackChannel ? `${s.slackChannel}에 보내기` : 'Slack에 보내기';
   }
@@ -839,8 +895,9 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     panel.classList.toggle('hide', !(waiting || countdown || resultShown));
     hostShare.hidden = !(isHost && waiting);
     btnSlackNotify.hidden = !s.slackChannel;
-    btnCopyLinkSmall.hidden = isHost && waiting;
-    recordWrap.hidden = !waiting;
+    // 링크 복사·녹화는 주최자만. 링크 복사는 큰 공유 칸이 사라진 뒤(출발 후)에만 작게 둔다
+    btnCopyLinkSmall.hidden = !isHost || waiting;
+    recordWrap.hidden = !(isHost && waiting);
     btnStart.hidden = !(isHost && waiting);
     btnReset.hidden = !(isHost && !waiting);
     // 레이스 중에는 고치지 않는다. 기다릴 때와 결과가 나온 뒤에만 연다
@@ -850,7 +907,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     if (waiting) {
       note = isHost
         ? '보는 사람이 다 들어오지 않아도 시작할 수 있습니다. 늦게 들어온 사람도 같은 장면을 따라잡습니다.'
-        : '링크를 열어 두기만 하면 됩니다. 주최자가 시작하면 모두 같이 출발합니다.';
+        : '주최자가 시작하면 자동으로 출발합니다.';
     } else if (countdown) {
       note = isHost ? '곧 출발합니다. 잘못 눌렀다면 "다시 추첨"으로 멈출 수 있습니다.' : '곧 출발합니다.';
     } else if (resultShown) {
@@ -867,11 +924,16 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
   client.on('state', applyState);
   client.on('count', renderCount);
   renderCount(client.count);
-  client.on('conn', (c) => {
+  const roomHead = $('#roomHead');
+  const renderConn = (c: ConnState) => {
     netEl.dataset.state = c;
     netEl.textContent = NET_TEXT[c];
     netEl.title = c === 'polling' ? '실시간 연결이 막혀 있어 1.5초마다 상태를 받고 있습니다.' : '';
-  });
+    // 보는 사람에게는 방 번호·인원 줄을 숨기고, 연결이 불안할 때만 보여 준다
+    roomHead.hidden = !isHost && (c === 'online' || c === 'polling');
+  };
+  client.on('conn', renderConn);
+  renderConn(client.conn);
   client.on('error', (msg) => toast(msg, 3000));
   if (client.state) applyState(client.state);
   client.connect();

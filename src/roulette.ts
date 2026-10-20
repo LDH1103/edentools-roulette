@@ -597,6 +597,11 @@ export class Roulette extends EventTarget {
     return this._tick;
   }
 
+  /** 캔버스를 눌러 빨리 감기를 쓸 수 있는지. 방 모드에서는 효과가 없으므로 아이콘도 띄우지 않는다 */
+  public setFastForwardAllowed(allowed: boolean) {
+    this.fastForwarder.allowed = allowed;
+  }
+
   public setSpeed(value: number) {
     if (value <= 0) {
       throw new Error('Speed multiplier must larger than 0');

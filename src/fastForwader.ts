@@ -17,6 +17,8 @@ export class FastForwader implements UIObject {
   }
 
   private isEnabled: boolean = false;
+  /** 방 모드에서는 모두가 같은 시계를 따르므로 빨리 감기를 막는다 */
+  public allowed = true;
 
   public get speed(): number {
     return this.isEnabled ? 2 : 1;
@@ -49,7 +51,7 @@ export class FastForwader implements UIObject {
   // 캔버스 어디를 눌러도 2배속이 된다 (영역 밖에서 누르면 mouseHandler 가 undefined 를 넘기지만 그때도 켠다).
   // 누른 채로 미니맵 위로 움직이며 화면을 옮길 수 있도록 일부러 가운데 영역으로 제한하지 않는다
   onMouseDown?(_e?: MouseEventArgs): void {
-    this.isEnabled = true;
+    this.isEnabled = this.allowed;
   }
 
   onMouseUp?(_e?: MouseEventArgs): void {
