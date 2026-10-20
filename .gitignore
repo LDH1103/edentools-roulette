@@ -11,3 +11,7 @@ src/preview.ts
 custom.html
 preview.html
 scripts/build-custom.sh
+
+# wrangler 로컬 실행 산출물
+.wrangler/
+worker/node_modules
