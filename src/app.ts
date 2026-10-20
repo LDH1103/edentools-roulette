@@ -765,7 +765,7 @@ function setupMode(roulette: Roulette): void {
       // 새로고침 없이 방 화면으로 넘어간다. 주소창에는 공유할 링크가 남는다
       roulette.removeEventListener('goal', onGoal);
       history.pushState(null, '', `#${id}`);
-      void enterRoom(roulette, id, hostKey);
+      void enterRoom(roulette, id, hostKey, true);
     } catch (e) {
       form.showError(`링크를 만들지 못했습니다. ${friendlyError(e)}`);
       createBtn.disabled = false;
@@ -777,7 +777,8 @@ function setupMode(roulette: Roulette): void {
 // ---------------------------------------------------------------------------
 // 방 모드
 // ---------------------------------------------------------------------------
-async function enterRoom(roulette: Roulette, id: string, hostKey: string | null): Promise<void> {
+/** announce: 방을 막 만든 주최자 화면이면 고른 Slack 채널에 추첨 링크를 바로 올린다 */
+async function enterRoom(roulette: Roulette, id: string, hostKey: string | null, announce = false): Promise<void> {
   const panel = $('#roomPanel');
   const overlay = $('#overlay');
   const eyebrow = $('#overlayEyebrow');
@@ -828,6 +829,8 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
   let started = false;
   /** 결과가 나왔고 연출을 보여 준 뒤라 패널을 다시 띄워도 되는지 */
   let resultShown = false;
+  /** 이 화면에서 추첨 링크를 올린 채널. 같은 채널이면 버튼을 "다시 보내기"로 둔다 */
+  let linkSentTo: string | null = null;
   let resultTimer = 0;
 
   function slackText(s: RoomState): string {
@@ -871,7 +874,11 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
       summaryEl.append(' · ', tag);
     }
     const notifyBtn = $('#btnSlackNotify');
-    notifyBtn.textContent = s.slackChannel ? `${s.slackChannel}에 보내기` : 'Slack에 보내기';
+    // 이미 올린 채널 여부
+    const alreadySent = s.slackChannel !== null && s.slackChannel === linkSentTo;
+    notifyBtn.textContent = s.slackChannel
+      ? `${s.slackChannel}에 ${alreadySent ? '다시 ' : ''}보내기`
+      : 'Slack에 보내기';
   }
 
   function applyState(s: RoomState) {
@@ -1025,19 +1032,25 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     }, RESULT_PANEL_DELAY_MS);
   });
 
-  btnSlackNotify.addEventListener('click', async () => {
+  /** 추첨 링크를 방의 Slack 채널에 올린다. 채널을 안 골랐으면 하지 않는다 */
+  async function sendLinkToSlack() {
     const s = client.state;
     if (!hostKey || !s?.slackChannel) return;
     btnSlackNotify.disabled = true;
     try {
       await client.notifySlack(hostKey, currentMapTitle());
+      linkSentTo = s.slackChannel;
+      btnSlackNotify.textContent = `${s.slackChannel}에 다시 보내기`;
       toast(`${s.slackChannel}에 추첨 링크를 보냈습니다.`, 3000);
     } catch (e) {
       toast(`Slack 에 보내지 못했습니다. ${friendlyError(e)}`, 4500);
     } finally {
       btnSlackNotify.disabled = false;
     }
-  });
+  }
+  btnSlackNotify.addEventListener('click', () => void sendLinkToSlack());
+  // 링크를 막 만들었으면 고른 채널에 바로 올린다
+  if (announce) void sendLinkToSlack();
 
   btnStart.addEventListener('click', async () => {
     const s = client.state;
