@@ -98,7 +98,7 @@ div.copyright a {
   z-index: 999;
   max-height: calc(100% - 3rem);
   overflow-y: auto;
-  background: #666;
+  background: #555;
   color: #fefefe;
   border-radius: 10px;
   padding: 12px;
@@ -126,15 +126,15 @@ div.copyright a {
   }
 
   .hint {
-    color: #e2e2e2;
-    font-size: 9pt;
+    color: #ececec;
+    font-size: 10pt;
   }
 
   code {
     background: rgba(0, 0, 0, 0.25);
     border-radius: 3px;
     padding: 0 4px;
-    font-size: 9pt;
+    font-size: 9.5pt;
     white-space: nowrap;
   }
 
@@ -172,8 +172,8 @@ div.copyright a {
 
   button.small,
   .btn.small {
-    padding: 4px 8px;
-    font-size: 9pt;
+    padding: 4px 9px;
+    font-size: 10pt;
   }
 
   button.primary {
@@ -283,65 +283,124 @@ div.copyright a {
 }
 
 #settings {
+  .panel-corner {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
+  // 단계 번호: 참가자 → 맵과 당첨 → 알림
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    border-radius: 50%;
+    background: #00baff;
+    color: #111;
+    font-size: 9pt;
+  }
+
   .names {
     grid-area: names;
     display: grid;
     align-content: start;
-    gap: 6px;
+    gap: 8px;
     min-width: 0;
   }
 
   .names-head {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 8px;
+    align-items: center;
+    gap: 10px;
+    padding-right: 40px;
   }
 
-  .repeat-all {
-    margin-left: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 9.5pt;
-    white-space: nowrap;
+  .add-name {
+    display: flex;
+    gap: 6px;
 
-    input[type='number'] {
-      width: 4em;
-      height: 26px;
-      padding: 0 2px;
-      text-align: center;
+    input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 32px;
+      padding: 0 10px;
+      background: #ddd;
     }
   }
 
+  .names-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 10px;
+  }
+
+  .per-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+
+    output {
+      min-width: 1.6em;
+      text-align: center;
+      font-weight: bold;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  .step-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 13pt;
+  }
+
+  .direct-input,
+  .more {
+    summary {
+      width: fit-content;
+      color: #ececec;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    &[open] {
+      display: grid;
+      gap: 6px;
+    }
+  }
+
+  .field-error {
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: rgba(140, 0, 0, 0.45);
+    color: #ffe1db;
+  }
+
   .marble-count {
-    color: #e2e2e2;
-    font-size: 9.5pt;
+    color: #ececec;
+    font-size: 10pt;
     font-variant-numeric: tabular-nums;
   }
 
   #in_names {
     min-height: 5.5rem;
     font-size: 12pt;
-  }
-
-  .roster {
-    display: grid;
-    gap: 6px;
-    padding-top: 6px;
-    border-top: 1px solid #7a7a7a;
-  }
-
-  .roster-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
-
-  .roster-title {
-    font-weight: bold;
   }
 
   .roster-actions,
@@ -362,19 +421,52 @@ div.copyright a {
     }
   }
 
+  // 고르지 않은 이름은 회색, 고른 이름은 파란 칩에 구슬 수와 −/+ 를 붙인다. 명단에 없는 이름은 점선
   .chip {
-    padding: 3px 10px;
+    padding: 4px 12px;
     border: 1px solid #9a9a9a;
     border-radius: 999px;
-    background: #777;
+    background: #6d6d6d;
     color: #fefefe;
-    font-size: 9.5pt;
+    font-size: 10.5pt;
+  }
 
-    &[aria-pressed='true'] {
-      background: #00baff;
-      border-color: #00baff;
-      color: #111;
+  .chip.on {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 12px;
+    background: #00baff;
+    border-color: #00baff;
+    color: #111;
+
+    &.extra {
+      border: 2px dashed #0a4f6b;
     }
+  }
+
+  .chip-name {
+    padding: 2px 0;
+    background: none;
+    color: inherit;
+    font-weight: bold;
+  }
+
+  .chip-step {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 50%;
+    background: #0a4f6b;
+    color: #fff;
+    font-size: 11pt;
+  }
+
+  .chip-count {
+    min-width: 1.2em;
+    text-align: center;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
   }
 
   .roster-editor {
@@ -463,17 +555,13 @@ div.copyright a {
 
   .winner-summary {
     padding-left: calc(4.6em + 8px);
-    color: #e2e2e2;
-    font-size: 9.5pt;
+    color: #ececec;
+    font-size: 10pt;
   }
 
   .opt-toggles {
     flex-wrap: wrap;
     gap: 14px;
-
-    .btn-theme {
-      margin-left: auto;
-    }
   }
 
   .slack-mark {
@@ -505,6 +593,12 @@ div.copyright a {
   .edit-note {
     background: rgba(0, 186, 255, 0.2);
     color: #fefefe;
+  }
+
+  // 만들기 전에 보는 확인 줄
+  .confirm-line {
+    flex: 1 0 100%;
+    font-weight: bold;
   }
 
   #btnCreateRoom,
@@ -584,6 +678,16 @@ div.copyright a {
 
     label {
       font-weight: bold;
+    }
+
+    // 링크를 Slack 에 올린 뒤: 안내를 초록으로, 복사 칸은 작게
+    &.sent label {
+      color: #b9f5bf;
+    }
+
+    &.sent .copyline input {
+      height: 28px;
+      font-size: 9pt;
     }
 
     .row-buttons {
@@ -764,7 +868,45 @@ div.copyright a {
   }
 
   .field-label {
+    margin: 0;
+    font-size: inherit;
     font-weight: bold;
+  }
+
+  .dialog-section {
+    display: grid;
+    gap: 6px;
+  }
+
+  .channel-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .channel-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-weight: bold;
+    }
+
+    button.small {
+      padding: 5px 12px;
+    }
+
+    button.confirming {
+      background: #b3261e;
+    }
   }
 
 
@@ -929,13 +1071,93 @@ div.toast {
   #settings.panel {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      'options'
       'names'
+      'options'
       'actions';
     gap: 10px;
   }
 
+  // 폰: 손가락으로 누르기 쉽게 40px 안팎으로 키우고, 확인 줄과 만들기 버튼은 아래에 고정한다
   #settings {
+    button,
+    .btn,
+    select,
+    input[type='number'],
+    input[type='text'] {
+      min-height: 40px;
+    }
+
+    button.small {
+      padding: 6px 12px;
+    }
+
+    .chip {
+      min-height: 40px;
+    }
+
+    .chip.on {
+      padding: 2px 4px 2px 14px;
+    }
+
+    .chip-name {
+      min-height: 36px;
+    }
+
+    .chip-step {
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+    }
+
+    .step-btn,
+    .panel-corner {
+      width: 40px;
+      height: 40px;
+    }
+
+    .add-name input {
+      height: 40px;
+    }
+
+    .seg button {
+      min-height: 40px;
+    }
+
+    .toggle {
+      min-height: 40px;
+    }
+
+    .switch {
+      width: 48px;
+      height: 28px;
+      min-height: 28px;
+      border-radius: 14px;
+
+      &::after {
+        width: 24px;
+        height: 24px;
+      }
+
+      &:checked::after {
+        transform: translateX(20px);
+      }
+    }
+
+    // 펼침 삼각형은 그대로 두고 누르는 높이만 키운다
+    summary {
+      padding: 10px 0;
+    }
+
+    .actions {
+      position: sticky;
+      bottom: -10px;
+      z-index: 1;
+      margin: 0 -10px -10px;
+      padding: 10px;
+      background: #555;
+      box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.3);
+    }
+
     .btn-toggle-settings {
       display: flex;
       align-items: center;

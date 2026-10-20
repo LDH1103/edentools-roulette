@@ -27,48 +27,55 @@
 
 <!-- 설정 화면: 주최자가 참가자·당첨 방식을 정하고 공유 링크를 만들거나, 방 없이 혼자 돌린다 -->
 <div id="settings" class="panel settings" hidden>
-  <section class="names" aria-label="참가자">
+  <button type="button" class="btn-theme panel-corner" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
+
+  <section class="names" aria-labelledby="namesTitle">
     <div class="names-head">
-      <h3><label for="in_names">참가자</label></h3>
-      <span class="repeat-all">
-        <label for="in_repeat">모두</label>
-        <input type="number" id="in_repeat" value="2" min="1" max="100" inputmode="numeric" />
-        <span>번씩</span>
-        <button type="button" class="small" id="btnRepeatAll">넣기</button>
-      </span>
+      <h3 id="namesTitle"><span class="step" aria-hidden="true">1</span>참가자</h3>
       <span class="marble-count" id="marbleCount"></span>
     </div>
-    <p class="hint">쉼표나 줄바꿈으로 구분합니다. <code>이름*2</code>는 구슬 2개, <code>이름/3</code>은 가중치 3입니다.</p>
-    <textarea id="in_names" rows="4" spellcheck="false" placeholder="홍길동&#10;김철수*2&#10;이영희/3"></textarea>
-
-    <div class="roster">
-      <div class="roster-head">
-        <span class="roster-title">저장된 명단</span>
-        <span class="roster-actions">
-          <button type="button" class="small" id="rosterAll">전체 추가</button>
-          <button type="button" class="small" id="rosterNone">전체 빼기</button>
-          <button type="button" class="small" id="rosterToggleEdit" aria-expanded="false" aria-controls="rosterEditor">편집</button>
-        </span>
-      </div>
-      <div class="chips" id="rosterChips"></div>
-      <p class="hint" id="rosterEmpty">자주 쓰는 이름을 "편집"에서 저장해 두면, 다음부터는 이름을 눌러 넣고 뺄 수 있습니다.</p>
-      <div class="roster-editor" id="rosterEditor" hidden>
-        <textarea id="rosterEdit" rows="3" spellcheck="false" placeholder="한 줄에 한 명씩" aria-label="저장할 명단"></textarea>
-        <div class="row-buttons">
-          <button type="button" class="small" id="rosterSave">명단 저장</button>
-          <button type="button" class="small" id="rosterFromNames">지금 참가자 가져오기</button>
-          <span class="hint">서버에 저장되어 같이 씁니다.</span>
-        </div>
+    <div class="chips" id="rosterChips" aria-label="참가자 고르기"></div>
+    <p class="hint" id="rosterEmpty">자주 쓰는 이름을 "명단 편집"에 저장해 두면 눌러서 넣고 뺄 수 있습니다.</p>
+    <form class="add-name" id="addNameForm" novalidate>
+      <input type="text" id="in_addName" maxlength="200" placeholder="이름 추가, 쉼표로 여러 명" autocomplete="off" enterkeyhint="done" aria-label="참가자 이름 추가" />
+      <button type="submit" id="btnAddName">추가</button>
+    </form>
+    <div class="names-tools">
+      <span class="per-person" role="group" aria-labelledby="perPersonLabel">
+        <span id="perPersonLabel">한 사람당 구슬</span>
+        <button type="button" class="step-btn" id="btnPerMinus" aria-label="한 사람당 구슬 하나 줄이기">−</button>
+        <output id="perPerson" aria-live="polite">1</output>
+        <button type="button" class="step-btn" id="btnPerPlus" aria-label="한 사람당 구슬 하나 늘리기">+</button>
+      </span>
+      <span class="roster-actions">
+        <button type="button" class="small" id="rosterAll">전체 추가</button>
+        <button type="button" class="small" id="rosterNone">전체 빼기</button>
+        <button type="button" class="small" id="rosterToggleEdit" aria-expanded="false" aria-controls="rosterEditor">명단 편집</button>
+      </span>
+    </div>
+    <div class="roster-editor" id="rosterEditor" hidden>
+      <textarea id="rosterEdit" rows="3" spellcheck="false" placeholder="한 줄에 한 명씩" aria-label="저장할 명단"></textarea>
+      <div class="row-buttons">
+        <button type="button" class="small" id="rosterSave">명단 저장</button>
+        <button type="button" class="small" id="rosterFromNames">지금 참가자 가져오기</button>
+        <span class="hint">서버에 저장되어 같이 씁니다.</span>
       </div>
     </div>
+    <details class="direct-input" id="directInput">
+      <summary>직접 입력</summary>
+      <p class="hint">쉼표나 줄바꿈으로 구분합니다. <code>이름*2</code>는 구슬 2개, <code>이름/3</code>은 가중치 3입니다.</p>
+      <textarea id="in_names" rows="4" spellcheck="false" placeholder="홍길동&#10;김철수*2&#10;이영희/3" aria-label="참가자 직접 입력"></textarea>
+    </details>
+    <p class="field-error" id="namesError" role="alert" hidden></p>
   </section>
 
-  <section class="options" aria-label="추첨 설정">
+  <section class="options" aria-label="맵, 당첨, 알림">
     <button id="btnToggleSettings" class="btn-toggle-settings" type="button" aria-expanded="false" aria-controls="settingsRows">
-      <span id="settingsSummary">설정</span>
+      <span id="settingsSummary">맵·당첨·알림</span>
       <i class="toggle-arrow" aria-hidden="true">▲</i>
     </button>
     <div class="collapsible-rows collapsed" id="settingsRows">
+      <h3><span class="step" aria-hidden="true">2</span>맵과 당첨</h3>
       <div class="opt-row">
         <label class="opt-label" for="sltMap"><i class="icon map" aria-hidden="true"></i>맵</label>
         <select id="sltMap"></select>
@@ -92,24 +99,29 @@
         <span>등까지</span>
       </div>
       <p class="winner-summary" id="winnerSummary"></p>
-      <div class="opt-row opt-toggles">
-        <label class="toggle" for="chkSkill"><i class="icon bomb" aria-hidden="true"></i>스킬 <input type="checkbox" class="switch" id="chkSkill" checked /></label>
-        <label class="toggle" id="setupRecordWrap" for="chkAutoRecording"><i class="icon record" aria-hidden="true"></i>녹화 <input type="checkbox" class="switch" id="chkAutoRecording" /></label>
-        <button type="button" class="btn-theme" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
-      </div>
+
+      <h3><span class="step" aria-hidden="true">3</span>알림</h3>
       <div class="opt-row">
-        <label class="opt-label" for="sltSlack"><span class="slack-mark" aria-hidden="true">#</span>알림</label>
+        <label class="opt-label" for="sltSlack"><span class="slack-mark" aria-hidden="true">#</span>Slack</label>
         <select id="sltSlack"></select>
-        <button type="button" class="small" id="btnSlackAdd">추가</button>
-        <button type="button" class="small" id="btnSlackRemove" hidden>삭제</button>
+        <button type="button" class="small" id="btnSlackManage">채널 관리</button>
       </div>
-      <p class="winner-summary" id="slackSummary" hidden>링크·출발·결과(화면 캡처 포함)를 이 채널에 알립니다.</p>
+      <p class="winner-summary" id="slackSummary" hidden>링크를 만들면 이 채널에 바로 올리고, 출발과 결과(화면 캡처 포함)도 알립니다.</p>
+
+      <details class="more">
+        <summary>더 보기</summary>
+        <div class="opt-row opt-toggles">
+          <label class="toggle" for="chkSkill"><i class="icon bomb" aria-hidden="true"></i>스킬 <input type="checkbox" class="switch" id="chkSkill" checked /></label>
+          <label class="toggle" id="setupRecordWrap" for="chkAutoRecording"><i class="icon record" aria-hidden="true"></i>녹화 <input type="checkbox" class="switch" id="chkAutoRecording" /></label>
+        </div>
+      </details>
     </div>
   </section>
 
   <div class="actions">
     <p class="edit-note" id="editNote" hidden>설정을 고치는 중입니다. 저장하면 같은 링크에서 새 시드로 대기 상태가 되고, 보는 사람 화면에도 바로 적용됩니다.</p>
     <p class="setup-error" id="setupError" role="alert" hidden></p>
+    <p class="confirm-line" id="confirmLine" aria-live="polite"></p>
     <button id="btnShuffle" type="button"><i class="icon shuffle" aria-hidden="true"></i>섞기</button>
     <span class="sep"></span>
     <button id="btnLocal" type="button"><i class="icon play" aria-hidden="true"></i>혼자 돌리기</button>
@@ -130,7 +142,7 @@
   <p class="room-summary" id="roomSummary"></p>
 
   <div class="host-share" id="hostShare" hidden>
-    <label for="shareUrl">이 링크를 Slack에 올리세요</label>
+    <label for="shareUrl" id="shareLabel">이 링크를 Slack에 올리세요</label>
     <div class="copyline">
       <input type="text" id="shareUrl" readonly />
       <button type="button" id="btnCopyLink">복사</button>
@@ -154,13 +166,19 @@
   </div>
 </div>
 
-<!-- Slack 알림 채널 추가 -->
+<!-- Slack 알림 채널 관리: 저장된 채널 지우기와 새 채널 추가 -->
 <dialog id="slackDialog" class="dialog" aria-labelledby="slackDialogTitle">
   <form class="dialog-body" id="slackForm" novalidate>
     <div class="dialog-head">
-      <h2 id="slackDialogTitle">Slack 알림 채널 추가</h2>
+      <h2 id="slackDialogTitle">Slack 알림 채널</h2>
       <button type="button" class="dialog-close" id="btnSlackClose" aria-label="닫기">✕</button>
     </div>
+    <section class="dialog-section" id="slackListWrap" hidden>
+      <h3 class="field-label">저장된 채널</h3>
+      <ul class="channel-list" id="slackChannelList"></ul>
+      <p class="field-help">같이 쓰는 목록이라 지우면 모두에게서 사라집니다. 삭제를 한 번 더 눌러야 지워집니다.</p>
+    </section>
+    <h3 class="field-label">새 채널 추가</h3>
     <details class="guide" id="slackGuide">
       <summary>Webhook 주소 만드는 법</summary>
       <ol>
@@ -184,8 +202,8 @@
     <div class="dialog-actions">
       <button type="button" id="btnSlackTest">테스트 보내기</button>
       <span class="sep"></span>
-      <button type="button" id="btnSlackCancel">취소</button>
-      <button type="submit" class="primary" id="btnSlackSave">저장</button>
+      <button type="button" id="btnSlackCancel">닫기</button>
+      <button type="submit" class="primary" id="btnSlackSave">추가</button>
     </div>
     <p class="field-help">채널 목록은 서버에 저장되어 같이 씁니다. 주소는 서버에만 보관하고 화면에는 채널 이름만 보입니다.</p>
   </form>

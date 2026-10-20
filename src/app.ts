@@ -236,7 +236,8 @@ type SettingsForm = {
   /** 고른 Slack 알림 채널. 알림을 안 보내면 null */
   getSlack: () => SlackChoice | null;
   getNames: () => string[];
-  showError: (msg: string | null) => void;
+  /** 안내를 띄운다. names 는 참가자 칸 아래, 기본은 만들기 버튼 위 */
+  showError: (msg: string | null, where?: 'names' | 'actions') => void;
   /** 입력값으로 당첨 범위를 다시 계산해 구슬에 반영한다 */
   applyWinner: () => void;
   /** 방 설정을 폼에 채우고 미리보기 구슬을 놓는다 */
@@ -261,7 +262,10 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   const chkSkill = $<HTMLInputElement>('#chkSkill');
   const chkRecording = $<HTMLInputElement>('#chkAutoRecording');
   const errorEl = $('#setupError');
+  const namesErrorEl = $('#namesError');
   const countEl = $('#marbleCount');
+  /** 방에서 설정을 고치는 중인지. 확인 줄 문구가 달라진다 */
+  let editing = false;
   const slackSelect = $<HTMLSelectElement>('#sltSlack');
   // Slack 채널: 공용 저장소의 채널(주소 없이 id·이름)
   let slackChannels: SharedChannel[] = sharedChannels();
@@ -278,9 +282,14 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
 
   const getNames = () => splitNames(namesInput.value);
 
-  function showError(msg: string | null) {
-    errorEl.textContent = msg ?? '';
-    errorEl.hidden = !msg;
+  /** 안내를 문제가 난 자리에 띄운다: names 는 참가자 칸 아래, actions 는 만들기 버튼 위 */
+  function showError(msg: string | null, where: 'names' | 'actions' = 'actions') {
+    const el = where === 'names' ? namesErrorEl : errorEl;
+    el.textContent = msg ?? '';
+    el.hidden = !msg;
+    // 참가자 안내 표시 여부: 폰에서는 참가자 칸이 화면 밖일 수 있어 보이게 끌어온다
+    const showsNames = !!msg && where === 'names';
+    if (showsNames) el.scrollIntoView({ block: 'nearest' });
   }
 
   /** 입력으로 당첨 설정을 읽어 구슬 수에 맞게 자른다 (범위가 뒤집히면 방금 고친 쪽을 존중) */
@@ -328,8 +337,26 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     $('#winnerSummary').textContent = winnerSentence(winner);
     const mapTitle = $<HTMLSelectElement>('#sltMap').selectedOptions[0]?.textContent ?? '';
     const slack = getSlack();
-    $('#settingsSummary').textContent =
-      `설정 · ${winnerShort(winner)}${mapTitle ? ` · ${mapTitle}` : ''}${slack ? ` · 알림 ${slack.channel}` : ''}`;
+    // 폰에서 접힌 설정 줄. 채널 이름은 중간에서 줄이 바뀌지 않게 묶는다
+    const summary = $('#settingsSummary');
+    summary.replaceChildren(`맵·당첨·알림 · ${winnerShort(winner)}${mapTitle ? ` · ${mapTitle}` : ''}`);
+    if (slack) {
+      const tag = document.createElement('span');
+      tag.className = 'nowrap';
+      tag.textContent = `알림 ${slack.channel}`;
+      summary.append(' · ', tag);
+    }
+    renderConfirm();
+  }
+
+  /** 만들기 버튼 위 확인 줄: 몇 명, 구슬 몇 개 중 몇 명 당첨, 어느 채널에 알리는지 */
+  function renderConfirm() {
+    const slack = getSlack();
+    let notice = '알림 없음';
+    if (slack) notice = editing ? `알림 ${slack.channel}` : `${slack.channel}에 바로 알림`;
+    const people = readEntries().size;
+    $('#confirmLine').textContent =
+      `${people}명 · 구슬 ${roulette.getCount()}개 중 ${winnerShort(winner)} 당첨 · ${notice}`;
   }
 
   function applyWinner(edited?: 'start' | 'end') {
@@ -339,66 +366,87 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     renderWinnerInputs();
   }
 
-  /** 입력창의 이름으로 구슬을 다시 놓는다 */
+  /** 이름 칸의 참가자로 구슬을 다시 놓는다. 참가자가 바뀌면 참가자 칸의 안내는 지운다 */
   function getReady() {
     const names = getNames();
     roulette.setMarbles(names, previewSeed);
     prefSet(NAMES_KEY, names.join('\n'));
-    countEl.textContent = `구슬 ${roulette.getCount()}개`;
-    applyWinner();
+    countEl.textContent = `${readEntries().size}명 · 구슬 ${roulette.getCount()}개`;
+    showError(null, 'names');
     renderRoster();
+    applyWinner();
   }
 
-  // ----- 참가자 입력 -----
+  // ----- 참가자: 이름 칸(직접 입력)이 원본이다. 칩·이름 추가·구슬 수 조절은 이름 칸을 고쳐 쓴다 -----
   const urlNames = new URLSearchParams(location.search).get('names');
   const savedNames = prefGet(NAMES_KEY);
   namesInput.value = urlNames ? urlNames.replace(/,/g, '\n') : (savedNames ?? EXAMPLE_NAMES).replace(/,/g, '\n');
   namesInput.addEventListener('input', getReady);
   namesInput.addEventListener('blur', () => {
     // 같은 이름은 개수로 합친다: 홍길동,홍길동 → 홍길동*2
-    const counts = new Map<string, number>();
-    for (const raw of getNames()) {
-      const parsed = parseNameLine(raw);
-      if (!parsed) continue;
-      counts.set(parsed.key, (counts.get(parsed.key) ?? 0) + parsed.count);
-    }
-    const merged = [...counts].map(([key, n]) => (n > 1 ? `${key}*${n}` : key)).join('\n');
+    const merged = entriesText(readEntries());
     if (merged !== namesInput.value) {
       namesInput.value = merged;
       getReady();
     }
   });
 
-  // ----- 모두 n번씩: 지금 참가자 모두의 구슬 수를 n개로 맞춘다. 가중치(/w)는 그대로 둔다 -----
-  const repeatInput = $<HTMLInputElement>('#in_repeat');
-  $('#btnRepeatAll').addEventListener('click', () => {
-    const times = Math.max(1, parseInt(repeatInput.value, 10) || 1);
-    repeatInput.value = String(times);
-    const keys = [
-      ...new Set(
-        getNames()
-          .map((raw) => parseNameLine(raw)?.key)
-          .filter((key): key is string => !!key)
-      ),
-    ];
-    if (keys.length === 0) {
-      showError('참가자를 먼저 넣으세요. 명단의 "전체 추가"로 한 번에 넣을 수 있습니다.');
-      return;
+  /** 지금 참가자. 키는 "이름" 또는 "이름/가중치", 값은 구슬 수. 같은 이름 줄은 합친다 */
+  function readEntries(): Map<string, number> {
+    const entries = new Map<string, number>();
+    for (const raw of getNames()) {
+      const parsed = parseNameLine(raw);
+      if (!parsed) continue;
+      entries.set(parsed.key, (entries.get(parsed.key) ?? 0) + parsed.count);
     }
-    // 구슬 수 = 참가자 수 × n 이 서버 한도를 넘는지
-    const tooMany = keys.length * times > MAX_MARBLES;
-    if (tooMany) {
-      showError(
-        `구슬은 ${MAX_MARBLES}개까지입니다. ${keys.length}명이면 ${Math.floor(MAX_MARBLES / keys.length)}번씩까지 넣을 수 있습니다.`
-      );
-      return;
-    }
-    showError(null);
-    namesInput.value = keys.map((key) => (times > 1 ? `${key}*${times}` : key)).join('\n');
-    getReady();
-  });
+    return entries;
+  }
 
-  // ----- 저장된 명단 (칩) -----
+  /** 참가자를 이름 칸 문법으로: 구슬이 2개 이상이면 이름*n */
+  function entriesText(entries: Map<string, number>): string {
+    return [...entries].map(([key, n]) => (n > 1 ? `${key}*${n}` : key)).join('\n');
+  }
+
+  /** 참가자를 이름 칸에 쓰고 구슬을 다시 놓는다. 구슬이 서버 한도를 넘으면 바꾸지 않고 안내한다 */
+  function commit(entries: Map<string, number>): boolean {
+    const total = [...entries.values()].reduce((sum, n) => sum + n, 0);
+    // 구슬 수 한도 초과 여부
+    const tooMany = total > MAX_MARBLES;
+    if (tooMany) {
+      showError(`구슬은 ${MAX_MARBLES}개까지입니다. 이대로면 ${total}개가 됩니다.`, 'names');
+      return false;
+    }
+    namesInput.value = entriesText(entries);
+    getReady();
+    return true;
+  }
+
+  /** 이름(이름 문법을 뗀 것)에 해당하는 참가자 키 */
+  const keyOf = (entries: Map<string, number>, name: string) => [...entries.keys()].find((k) => bareName(k) === name);
+
+  // ----- 한 사람당 구슬: 새로 넣는 사람의 구슬 수이고, 바꾸면 지금 참가자 모두에게 적용한다 -----
+  const perPersonEl = $('#perPerson');
+  let perPerson = 1;
+  /** 참가자 모두의 구슬 수가 같으면 그 값을 보여 준다. 섞여 있으면 마지막 값을 둔다 */
+  function syncPerPerson(entries: Map<string, number>) {
+    const counts = new Set(entries.values());
+    // 모두 같은 구슬 수 여부
+    const allSame = counts.size === 1;
+    if (allSame) perPerson = [...counts][0];
+    perPersonEl.textContent = String(perPerson);
+  }
+  function changePerPerson(delta: number) {
+    const next = Math.max(1, perPerson + delta);
+    const entries = readEntries();
+    for (const key of entries.keys()) entries.set(key, next);
+    if (!commit(entries)) return;
+    perPerson = next;
+    perPersonEl.textContent = String(perPerson);
+  }
+  $('#btnPerMinus').addEventListener('click', () => changePerPerson(-1));
+  $('#btnPerPlus').addEventListener('click', () => changePerPerson(1));
+
+  // ----- 참가자 칩: 저장된 명단과 지금 참가자를 함께 보여 준다. 누르면 넣고 빼고, −/+ 로 구슬 수를 바꾼다 -----
   const chips = $('#rosterChips');
   const rosterEdit = $<HTMLTextAreaElement>('#rosterEdit');
   const rosterEditor = $('#rosterEditor');
@@ -410,16 +458,52 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   } catch {
     roster = [];
   }
+
+  function chipButton(text: string, className: string, onClick: () => void): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = className;
+    b.textContent = text;
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  /** 고른 사람의 칩: 이름(누르면 빼기), −, 구슬 수, + */
+  function pickedChip(name: string, key: string, count: number, inRoster: boolean): HTMLElement {
+    const chip = document.createElement('span');
+    chip.className = inRoster ? 'chip on' : 'chip on extra';
+    chip.dataset.name = name;
+    chip.setAttribute('role', 'group');
+    chip.setAttribute('aria-label', `${name} 구슬 ${count}개`);
+    if (!inRoster) chip.title = '명단에 없는 이름';
+    const nameBtn = chipButton(key, 'chip-name', () => changeCount(key, -count));
+    nameBtn.setAttribute('aria-pressed', 'true');
+    nameBtn.title = `${name} 빼기`;
+    const minus = chipButton('−', 'chip-step', () => changeCount(key, -1));
+    minus.setAttribute('aria-label', `${name} 구슬 하나 빼기`);
+    const countText = document.createElement('span');
+    countText.className = 'chip-count';
+    countText.textContent = String(count);
+    const plus = chipButton('+', 'chip-step', () => changeCount(key, 1));
+    plus.setAttribute('aria-label', `${name} 구슬 하나 더`);
+    chip.append(nameBtn, minus, countText, plus);
+    return chip;
+  }
+
   function renderRoster() {
-    const current = new Set(getNames().map(bareName));
+    const entries = readEntries();
+    syncPerPerson(entries);
+    const rosterSet = new Set(roster);
+    // 칩 = 저장된 명단 + 명단에 없는 지금 참가자
+    const extra = [...new Set([...entries.keys()].map(bareName))].filter((name) => !rosterSet.has(name));
     chips.replaceChildren(
-      ...roster.map((name) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'chip';
-        b.textContent = name;
-        b.setAttribute('aria-pressed', String(current.has(name)));
-        b.addEventListener('click', () => toggleName(name));
+      ...[...roster, ...extra].map((name) => {
+        const key = keyOf(entries, name);
+        if (key !== undefined) return pickedChip(name, key, entries.get(key) ?? 1, rosterSet.has(name));
+        // 고르지 않은 이름: 누르면 한 사람당 구슬 수로 넣는다
+        const b = chipButton(name, 'chip', () => addNames([name]));
+        b.dataset.name = name;
+        b.setAttribute('aria-pressed', 'false');
         return b;
       })
     );
@@ -428,13 +512,41 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     $('#rosterAll').hidden = !hasRoster;
     $('#rosterNone').hidden = !hasRoster;
   }
-  function toggleName(name: string) {
-    const names = getNames();
-    const has = names.some((n) => bareName(n) === name);
-    const next = has ? names.filter((n) => bareName(n) !== name) : [...names, name];
-    namesInput.value = next.join('\n');
-    getReady();
+
+  /** 구슬 수를 delta 만큼 바꾼다. 0 이하가 되면 참가자에서 뺀다 */
+  function changeCount(key: string, delta: number) {
+    const entries = readEntries();
+    const next = (entries.get(key) ?? 0) + delta;
+    if (next > 0) entries.set(key, next);
+    else entries.delete(key);
+    commit(entries);
   }
+
+  /** 이름들을 참가자에 넣는다. 이미 있는 사람은 그대로 두고, 이름*n 으로 쓰면 그 개수로 넣는다 */
+  function addNames(lines: string[]): boolean {
+    const entries = readEntries();
+    for (const raw of lines) {
+      const parsed = parseNameLine(raw);
+      if (!parsed) continue;
+      // 이미 참가 중 여부
+      const already = keyOf(entries, bareName(parsed.key)) !== undefined;
+      if (already) continue;
+      // 개수를 적었는지 여부
+      const hasCount = /\*\s*\d+\s*$/.test(raw);
+      entries.set(parsed.key, hasCount ? parsed.count : perPerson);
+    }
+    return commit(entries);
+  }
+
+  const addNameInput = $<HTMLInputElement>('#in_addName');
+  $('#addNameForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const lines = splitNames(addNameInput.value);
+    if (lines.length === 0) return;
+    if (addNames(lines)) addNameInput.value = '';
+    addNameInput.focus();
+  });
+
   function saveRoster(list: string[]) {
     roster = [...new Set(list.map((s) => s.trim().slice(0, 40)).filter(Boolean))];
     prefSet(ROSTER_KEY, JSON.stringify(roster));
@@ -446,7 +558,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   function setEditorOpen(open: boolean) {
     rosterEditor.hidden = !open;
     rosterToggle.setAttribute('aria-expanded', String(open));
-    rosterToggle.textContent = open ? '편집 닫기' : '편집';
+    rosterToggle.textContent = open ? '편집 닫기' : '명단 편집';
   }
   rosterEdit.value = roster.join('\n');
   rosterToggle.addEventListener('click', () => {
@@ -462,17 +574,13 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     const merged = [...new Set([...splitNames(rosterEdit.value), ...getNames().map(bareName)])];
     rosterEdit.value = merged.join('\n');
   });
-  $('#rosterAll').addEventListener('click', () => {
-    const names = getNames();
-    const bare = new Set(names.map(bareName));
-    namesInput.value = [...names, ...roster.filter((r) => !bare.has(r))].join('\n');
-    getReady();
-  });
+  $('#rosterAll').addEventListener('click', () => addNames(roster));
   $('#rosterNone').addEventListener('click', () => {
-    namesInput.value = getNames()
-      .filter((n) => !roster.includes(bareName(n)))
-      .join('\n');
-    getReady();
+    const entries = readEntries();
+    for (const key of [...entries.keys()]) {
+      if (roster.includes(bareName(key))) entries.delete(key);
+    }
+    commit(entries);
   });
 
   // ----- 당첨 방식 -----
@@ -526,7 +634,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   const slackUrlHelp = $('#slackWebhookHelp');
   const slackStatus = $('#slackStatus');
   const slackTestBtn = $<HTMLButtonElement>('#btnSlackTest');
-  const slackRemove = $('#btnSlackRemove');
+  const channelList = $('#slackChannelList');
 
   /** 고를 수 있는 알림 채널. 서버가 방에 붙일 때 id 로 Webhook 주소를 찾는다 */
   function slackChoices(): SlackChoice[] {
@@ -541,7 +649,6 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
 
   function syncSlackControls() {
     const chosen = getSlack();
-    slackRemove.hidden = !chosen;
     $('#slackSummary').hidden = !chosen;
     prefSet(SLACK_LAST_KEY, chosen?.channel ?? '');
     renderWinnerInputs();
@@ -585,13 +692,62 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     return { channel: slackName.value.trim().slice(0, 40) || '알림 채널', webhook: slackUrl.value.trim() };
   }
 
-  $('#btnSlackAdd').addEventListener('click', () => {
+  /** 창 안의 저장된 채널 목록 */
+  function renderChannelList() {
+    $('#slackListWrap').hidden = slackChannels.length === 0;
+    channelList.replaceChildren(...slackChannels.map(channelRow));
+  }
+
+  /** 채널 한 줄. 같이 쓰는 목록이라 삭제는 한 번 더 눌러야 지운다 */
+  function channelRow(c: SharedChannel): HTMLLIElement {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.className = 'channel-name';
+    name.textContent = c.channel;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'small';
+    del.textContent = '삭제';
+    del.dataset.channelId = c.id;
+    let disarmTimer = 0;
+    del.addEventListener('click', async () => {
+      // 확인 상태 여부: 첫 번째 누름은 확인 상태로만 바꾸고, 4초 안에 다시 누르면 지운다
+      const armed = del.classList.contains('confirming');
+      if (!armed) {
+        del.classList.add('confirming');
+        del.textContent = '정말 삭제';
+        disarmTimer = window.setTimeout(() => {
+          del.classList.remove('confirming');
+          del.textContent = '삭제';
+        }, 4000);
+        return;
+      }
+      window.clearTimeout(disarmTimer);
+      del.disabled = true;
+      const selected = getSlack()?.channel ?? null;
+      try {
+        slackChannels = await removeSharedChannel(API_BASE, c.id);
+      } catch (err) {
+        setSlackStatus('error', `지우지 못했습니다. ${friendlyError(err)}`);
+        del.disabled = false;
+        return;
+      }
+      renderChannelList();
+      renderSlack(selected === c.channel ? null : selected);
+      setSlackStatus('ok', `${c.channel} 채널을 지웠습니다.`);
+    });
+    li.append(name, del);
+    return li;
+  }
+
+  $('#btnSlackManage').addEventListener('click', () => {
     slackName.value = '';
     slackUrl.value = '';
     checkWebhookInput();
     setSlackStatus(null);
     // 처음 추가하는 사람에게는 만드는 법을 펼쳐 둔다
     $<HTMLDetailsElement>('#slackGuide').open = slackChoices().length === 0;
+    renderChannelList();
     slackDialog.showModal();
     slackName.focus();
   });
@@ -642,19 +798,6 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     toast(`${target.channel} 채널을 저장했습니다. 이 추첨의 알림 채널로 골라 두었습니다.`, 3000);
   });
   slackSelect.addEventListener('change', syncSlackControls);
-  slackRemove.addEventListener('click', async () => {
-    const chosen = getSlack();
-    if (!chosen) return;
-    const question = `${chosen.channel} 채널을 목록에서 지울까요? 같이 쓰는 목록이라 모두에게서 사라집니다.`;
-    if (!window.confirm(question)) return;
-    try {
-      slackChannels = await removeSharedChannel(API_BASE, chosen.channelId);
-    } catch (err) {
-      toast(`지우지 못했습니다. ${friendlyError(err)}`, 4000);
-      return;
-    }
-    renderSlack(null);
-  });
   renderSlack(prefGet(SLACK_LAST_KEY) || null);
 
   // ----- 방에서 설정 수정 -----
@@ -664,7 +807,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   editSave.addEventListener('click', async () => {
     if (!editHandlers) return;
     if (roulette.getCount() < 2) {
-      showError('참가자를 2명 이상 입력하세요.');
+      showError('참가자를 2명 이상 넣으세요.', 'names');
       return;
     }
     showError(null);
@@ -703,7 +846,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   }
 
   function setMode(mode: 'setup' | 'edit', handlers?: EditHandlers) {
-    const editing = mode === 'edit';
+    editing = mode === 'edit';
     editHandlers = editing ? (handlers ?? null) : null;
     $('#btnLocal').hidden = editing;
     $('#btnCreateRoom').hidden = editing;
@@ -712,6 +855,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     $('#editNote').hidden = !editing;
     // 방에서는 녹화를 방 카드의 "내 화면 녹화"로 켠다
     $('#setupRecordWrap').hidden = editing;
+    renderConfirm();
   }
 
   getReady();
@@ -739,7 +883,7 @@ function setupMode(roulette: Roulette): void {
 
   $('#btnLocal').addEventListener('click', () => {
     if (roulette.getCount() < 2) {
-      form.showError('참가자를 2명 이상 입력하세요.');
+      form.showError('참가자를 2명 이상 넣으세요.', 'names');
       return;
     }
     form.showError(null);
@@ -752,7 +896,7 @@ function setupMode(roulette: Roulette): void {
   const createBtn = $<HTMLButtonElement>('#btnCreateRoom');
   createBtn.addEventListener('click', async () => {
     if (roulette.getCount() < 2) {
-      form.showError('참가자를 2명 이상 입력하세요.');
+      form.showError('참가자를 2명 이상 넣으세요.', 'names');
       return;
     }
     form.showError(null);
@@ -879,6 +1023,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null,
     notifyBtn.textContent = s.slackChannel
       ? `${s.slackChannel}에 ${alreadySent ? '다시 ' : ''}보내기`
       : 'Slack에 보내기';
+    renderShareState(alreadySent ? s.slackChannel : null);
   }
 
   function applyState(s: RoomState) {
@@ -1032,6 +1177,14 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null,
     }, RESULT_PANEL_DELAY_MS);
   });
 
+  /** 링크를 채널에 올렸으면 공유 칸을 "올렸습니다"로 바꾸고 복사 칸은 보조로 둔다. 안 올렸으면 null */
+  function renderShareState(sentTo: string | null) {
+    $('#hostShare').classList.toggle('sent', sentTo !== null);
+    $('#shareLabel').textContent = sentTo
+      ? `✓ ${sentTo}에 링크를 올렸습니다. 다른 곳에도 나누려면 복사하세요.`
+      : '이 링크를 Slack에 올리세요';
+  }
+
   /** 추첨 링크를 방의 Slack 채널에 올린다. 채널을 안 골랐으면 하지 않는다 */
   async function sendLinkToSlack() {
     const s = client.state;
@@ -1041,6 +1194,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null,
       await client.notifySlack(hostKey, currentMapTitle());
       linkSentTo = s.slackChannel;
       btnSlackNotify.textContent = `${s.slackChannel}에 다시 보내기`;
+      renderShareState(s.slackChannel);
       toast(`${s.slackChannel}에 추첨 링크를 보냈습니다.`, 3000);
     } catch (e) {
       toast(`Slack 에 보내지 못했습니다. ${friendlyError(e)}`, 4500);
