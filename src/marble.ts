@@ -3,6 +3,7 @@ import type { IPhysics } from './IPhysics';
 import options from './options';
 import type { ColorTheme } from './types/ColorTheme';
 import type { VectorLike } from './types/VectorLike';
+import { gameRandom } from './utils/rng';
 import { transformGuard } from './utils/transformGuard';
 import { rad } from './utils/utils';
 import { Vector } from './utils/Vector';
@@ -59,7 +60,7 @@ export class Marble {
     this.physics = physics;
 
     this._maxCoolTime = 1000 + (1 - this.weight) * 4000;
-    this._coolTime = this._maxCoolTime * Math.random();
+    this._coolTime = this._maxCoolTime * gameRandom();
     this._skillRate = 0.2 * this.weight;
 
     const maxLine = Math.ceil(max / 10);
@@ -111,7 +112,7 @@ export class Marble {
     }
 
     if (this._coolTime <= 0) {
-      this.skill = Math.random() < this._skillRate ? Skills.Impact : Skills.None;
+      this.skill = gameRandom() < this._skillRate ? Skills.Impact : Skills.None;
       this._coolTime = this._maxCoolTime;
     }
   }
@@ -133,12 +134,11 @@ export class Marble {
     const viewPortTop = viewPort.y - viewPortHh;
     const viewPortBottom = viewPort.y + viewPortHh;
     const halfSize = this.size / 2;
-    const isOutsideView = (
+    const isOutsideView =
       this.x + halfSize < viewPortLeft ||
       this.x - halfSize > viewPortRight ||
       this.y + halfSize < viewPortTop ||
-      this.y - halfSize > viewPortBottom
-    );
+      this.y - halfSize > viewPortBottom;
     if (!isMinimap && isOutsideView) {
       return;
     }

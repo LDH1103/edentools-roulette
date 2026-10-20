@@ -1,7 +1,10 @@
-import Box2DFactory from 'box2d-wasm';
+// SIMD 여부에 따라 다른 wasm 빌드를 고르는 기본 로더 대신 비SIMD 빌드 하나로 고정한다.
+// 모두가 같은 바이너리로 같은 순서의 스텝을 돌려야 어느 브라우저에서나 결과가 같다
+import Box2DFactory from 'box2d-wasm/dist/es/Box2D.js';
 import type { StageDef } from './data/maps';
 import type { IPhysics } from './IPhysics';
 import type { MapEntity, MapEntityState } from './types/MapEntity.type';
+import { gameRandom } from './utils/rng';
 
 export class Box2dPhysics implements IPhysics {
   private Box2D!: typeof Box2D & EmscriptenModule;
@@ -109,7 +112,7 @@ export class Box2dPhysics implements IPhysics {
     bodyDef.set_position(new this.Box2D.b2Vec2(x, y));
 
     const body = this.world.CreateBody(bodyDef);
-    body.CreateFixture(circleShape, 1 + Math.random());
+    body.CreateFixture(circleShape, 1 + gameRandom());
     body.SetAwake(false);
     body.SetEnabled(false);
     this.marbleMap[id] = body;
@@ -118,7 +121,7 @@ export class Box2dPhysics implements IPhysics {
   shakeMarble(id: number): void {
     const body = this.marbleMap[id];
     if (body) {
-      body.ApplyLinearImpulseToCenter(new this.Box2D.b2Vec2(Math.random() * 10 - 5, Math.random() * 10 - 5), true);
+      body.ApplyLinearImpulseToCenter(new this.Box2D.b2Vec2(gameRandom() * 10 - 5, gameRandom() * 10 - 5), true);
     }
   }
 

@@ -1,0 +1,18 @@
+name = "roulette-sync"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+routes = [
+  { pattern = "roulette-api.edentools.dev", custom_domain = true }
+]
+
+[vars]
+ALLOWED_ORIGINS = "https://roulette.edentools.dev,http://localhost:1235,http://127.0.0.1:1235"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

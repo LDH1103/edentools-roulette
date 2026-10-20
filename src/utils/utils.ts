@@ -27,7 +27,8 @@ export function pad(v: number) {
   return v.toString().padStart(2, '0');
 }
 
-export function shuffle<T>(originalArray: T[]): T[] {
+/** random 을 넘기면 그 난수로 섞는다 (시드 난수로 구슬 배치를 재현할 때) */
+export function shuffle<T>(originalArray: T[], random: () => number = Math.random): T[] {
   const array = originalArray.slice();
   let currentIndex = array.length;
   let randomIndex;
@@ -35,7 +36,7 @@ export function shuffle<T>(originalArray: T[]): T[] {
   // While there remain elements to shuffle.
   while (currentIndex !== 0) {
     // Pick a remaining element.
-    randomIndex = Math.floor(Math.random() * currentIndex);
+    randomIndex = Math.floor(random() * currentIndex);
     currentIndex--;
 
     // And swap it with the current element.

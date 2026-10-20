@@ -1,235 +1,43 @@
-// 설정창의 맵 선택. 기본 맵과 맵 공유마당에서 받은 맵을 함께 보여준다.
-//
-// - 선택한 맵은 localStorage 에 기억해서 다음 방문에도 유지한다.
-// - ?installMap={id} 로 들어오면 맵을 받아 설치하고 바로 선택한다 (맵 공유마당의 "마블룰렛에 설치" 버튼).
-// - "맵 더 받기"(+) 버튼은 게임 안의 맵 브라우저를 연다 (mapBrowser.ts). 받은 맵에 업데이트가 있으면 버튼에 점을 찍는다.
-// - 받은 맵의 제목과 저작자는 사용자가 입력한 문자열이라 innerHTML 에 넣지 않는다.
-
-import {
-  COMMUNITY_MAP_ID,
-  checkMapUpdates,
-  fetchCommunityMap,
-  getDownloadedMaps,
-  getSelectedMapId,
-  getUpdatableMapIds,
-  type InstallResult,
-  installDownloadedMap,
-  rememberRemoteMapState,
-  removeDownloadedMap,
-  setSelectedMapId,
-} from './communityMaps';
+// 설정창의 맵 선택. 기본 맵만 보여주고 선택을 localStorage 에 기억한다
 import { stages } from './data/maps';
 import { translate } from './localization';
-import { createMapBrowser } from './mapBrowser';
 import type { Roulette } from './roulette';
 
-export interface MapSelectorOptions {
-  roulette: Roulette;
-  /** 맵 API 서버 (https://marblerouletteshop.com) */
-  apiBase: string;
-  /** 맵을 바꾼 뒤 이름 입력창에서 구슬을 다시 채운다 */
-  onMapChange: () => void;
-  /** 번역 키를 받아 토스트로 띄운다 */
-  toast: (key: string) => void;
-  /** 맵 브라우저를 쓸지. 커스텀 룰렛은 관리 페이지에서 끌 수 있다 (기본 true) */
-  mapBrowser?: boolean;
-}
+const STORAGE_KEY = 'er_map';
 
-const DEFAULT_MAP_ID = 'builtin:0';
-
-const INSTALL_MESSAGES: Record<InstallResult['result'], string> = {
-  installed: 'Map installed',
-  updated: 'Map updated',
-  already: 'This map is already installed',
-  limit: 'You can keep up to 30 downloaded maps. Remove some maps first.',
-  quota: 'Not enough storage. Remove some downloaded maps first.',
-  corrupt: 'Failed to install the map',
-  unavailable: 'Cannot save maps in this browser',
-};
-
-export function initMapSelector({ roulette, apiBase, onMapChange, toast, mapBrowser = true }: MapSelectorOptions) {
+export function initMapSelector(roulette: Roulette, onMapChange: () => void) {
   const select = document.querySelector<HTMLSelectElement>('#sltMap');
   if (!select) return;
-  const removeButton = document.querySelector<HTMLButtonElement>('#btnRemoveMap');
-  const moreButton = document.querySelector<HTMLAnchorElement>('#lnkMoreMaps');
 
-  function option(value: string, text: string) {
-    const el = document.createElement('option');
-    el.value = value;
-    el.textContent = text;
-    return el;
-  }
-
-  function group(label: string, options: HTMLOptionElement[]) {
-    const el = document.createElement('optgroup');
-    el.label = translate(label);
-    el.append(...options);
-    return el;
-  }
-
-  function hasOption(id: string) {
-    return Array.from(select!.options).some((o) => o.value === id);
-  }
-
-  function render() {
-    const builtin = stages.map((stage, index) => option(`builtin:${index}`, translate(stage.title)));
-    const downloaded = getDownloadedMaps().map((map) =>
-      option(`community:${map.id}`, `${map.title} (by ${map.author})`)
-    );
-    select!.replaceChildren();
-    if (downloaded.length === 0) {
-      select!.append(...builtin);
-    } else {
-      select!.append(group('Default maps', builtin), group('Downloaded maps', downloaded));
-    }
-  }
-
-  function syncControls(id: string) {
-    select!.value = id;
-    if (removeButton) removeButton.hidden = !id.startsWith('community:');
-  }
-
-  /** 맵을 바꾼다. 없는 맵이면 false */
-  function apply(id: string): boolean {
-    if (id.startsWith('builtin:')) {
-      const index = Number(id.slice('builtin:'.length));
-      if (!Number.isInteger(index) || index < 0 || index >= stages.length) return false;
-      roulette.setMap(index);
-    } else if (id.startsWith('community:')) {
-      const map = getDownloadedMaps().find((m) => `community:${m.id}` === id);
-      if (!map) return false;
-      roulette.setStage(map.stage, id);
-    } else {
-      return false;
-    }
-    setSelectedMapId(id);
-    syncControls(id);
-    onMapChange();
-    return true;
-  }
+  select.replaceChildren(
+    ...stages.map((stage, index) => {
+      const el = document.createElement('option');
+      el.value = String(index);
+      el.textContent = translate(stage.title);
+      return el;
+    })
+  );
 
   select.addEventListener('change', () => {
-    if (!apply(select.value)) {
-      // 다른 탭에서 지운 맵일 수 있다. 목록을 새로 그리고 기본 맵으로
-      render();
-      apply(DEFAULT_MAP_ID);
-    }
-    browser?.refresh();
-  });
-
-  /** 받은 맵을 지운다. 지금 쓰는 맵이면 기본 맵으로 돌아간다. 사용자가 취소하면 false */
-  function removeMap(id: string): boolean {
-    if (!window.confirm(translate('Remove this downloaded map?'))) return false;
-    removeDownloadedMap(id);
-    // render 가 옵션을 새로 만들면 선택값이 첫 맵으로 돌아가므로 미리 기억한다
-    const current = select!.value;
-    render();
-    if (current === `community:${id}` || !hasOption(current)) {
-      apply(DEFAULT_MAP_ID);
-    } else {
-      syncControls(current);
-    }
-    updateBadge();
-    return true;
-  }
-
-  removeButton?.addEventListener('click', () => {
-    const id = select.value;
-    if (!id.startsWith('community:')) return;
-    if (removeMap(id.slice('community:'.length))) browser?.refresh();
-  });
-
-  /**
-   * 받아서 설치하고 선택한다. 맵 브라우저와 ?installMap= 이 함께 쓴다.
-   * keepSelection 이면 (맵 브라우저의 업데이트) 선택은 그대로 두고, 지금 쓰는 맵이면 새 버전으로 다시 불러온다
-   */
-  async function installMap(id: string, keepSelection = false): Promise<boolean> {
-    let pkg = null;
+    const index = Number(select.value);
+    roulette.setMap(index);
     try {
-      pkg = await fetchCommunityMap(apiBase, id);
-    } catch (e) {
-      console.error('[maps] 맵을 받지 못했습니다', e);
+      localStorage.setItem(STORAGE_KEY, String(index));
+    } catch {
+      // 저장 불가 환경은 무시
     }
-    if (!pkg) {
-      toast('Failed to install the map');
-      return false;
-    }
-    const result = installDownloadedMap(pkg);
-    toast(INSTALL_MESSAGES[result.result]);
-    if (result.result !== 'installed' && result.result !== 'updated' && result.result !== 'already') return false;
-    rememberRemoteMapState(pkg.id, { version: pkg.version, available: true });
-    // render 가 옵션을 새로 만들면 선택값이 첫 맵으로 돌아가므로 미리 기억한다
-    const current = select!.value;
-    render();
-    if (!keepSelection || current === `community:${pkg.id}`) {
-      apply(`community:${pkg.id}`);
-    } else {
-      syncControls(current);
-    }
-    updateBadge();
-    return true;
-  }
+    onMapChange();
+  });
 
-  function updateBadge() {
-    moreButton?.classList.toggle('has-update', mapBrowser && getUpdatableMapIds().length > 0);
+  // 기억해 둔 맵이 있으면 그 맵으로
+  let saved = 0;
+  try {
+    saved = Number(localStorage.getItem(STORAGE_KEY) ?? 0);
+  } catch {
+    saved = 0;
   }
-
-  const browser = mapBrowser
-    ? createMapBrowser({
-        apiBase,
-        getSelectedId: () => select.value,
-        // 처음 받는 맵은 바로 쓰고, 이미 받은 맵의 업데이트는 선택을 건드리지 않는다
-        install: (id) => installMap(id, getDownloadedMaps().some((m) => m.id === id)),
-        use: (id) => {
-          if (!apply(`community:${id}`)) {
-            render();
-            apply(DEFAULT_MAP_ID);
-          }
-        },
-        remove: removeMap,
-      })
-    : null;
-
-  if (moreButton) {
-    if (browser) {
-      // 링크는 스크립트가 늦게 뜰 때를 위한 대비. 브라우저가 있으면 샵으로 넘기지 않고 연다
-      moreButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        browser.open();
-      });
-    } else {
-      moreButton.hidden = true;
-    }
+  if (Number.isInteger(saved) && saved > 0 && saved < stages.length) {
+    roulette.setMap(saved);
   }
-
-  // 처음 그리기: 기억해 둔 맵이 있으면 그 맵으로
-  render();
-  const saved = getSelectedMapId();
-  if (saved && saved !== DEFAULT_MAP_ID && hasOption(saved) && apply(saved)) {
-    // apply 가 선택까지 맞췄다
-  } else {
-    syncControls(roulette.getCurrentMap()?.id ?? DEFAULT_MAP_ID);
-  }
-
-  // 맵 공유마당의 "마블룰렛에 설치"
-  const params = new URLSearchParams(location.search);
-  const installId = params.get('installMap');
-  if (installId !== null) {
-    // 새로고침할 때마다 다시 설치하지 않도록 주소에서 뺀다
-    params.delete('installMap');
-    const query = params.toString();
-    history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
-    if (COMMUNITY_MAP_ID.test(installId)) {
-      void installMap(installId);
-    } else {
-      toast('Failed to install the map');
-    }
-  }
-
-  updateBadge();
-  if (mapBrowser) {
-    void checkMapUpdates(apiBase).then((checked) => {
-      if (checked) updateBadge();
-    });
-  }
+  select.value = String(roulette.getCurrentMap()?.index ?? 0);
 }

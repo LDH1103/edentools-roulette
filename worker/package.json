@@ -1,0 +1,14 @@
+{
+  "name": "roulette-sync",
+  "private": true,
+  "version": "1.0.0",
+  "description": "구슬 레이스 동시 시작 동기화 서버 (Cloudflare Worker + Durable Object)",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260901.0",
+    "wrangler": "^4.0.0"
+  }
+}

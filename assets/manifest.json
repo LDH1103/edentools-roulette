@@ -1,7 +1,7 @@
 {
-  "name": "Marble roulette",
-  "short_name": "MR",
-  "id": "lazygyu.marble-roulette",
+  "name": "구슬 레이스",
+  "short_name": "구슬 레이스",
+  "id": "dev.edentools.roulette",
   "icons": [
     {
       "src": "android-icon-36x36.png",
@@ -40,7 +40,7 @@
       "density": "4.0"
     }
   ],
-  "start_url": "https://lazygyu.github.io/roulette",
+  "start_url": "https://roulette.edentools.dev/",
   "display_override": [
     "fullscreen",
     "minimal-ui"
