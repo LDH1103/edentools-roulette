@@ -176,12 +176,9 @@ export class RoomClient {
     await this.getRoom();
   }
 
-  /**
-   * 주최자 동작은 HTTP 로 보낸다. WebSocket 이 막힌 환경에서도 시작할 수 있다.
-   * summary 는 Slack 출발 알림에 쓰는 한 줄 요약
-   */
-  async action(kind: 'start' | 'reset', key: string, summary?: string): Promise<void> {
-    await this.post(kind, { key, summary });
+  /** 주최자 동작은 HTTP 로 보낸다. WebSocket 이 막힌 환경에서도 시작할 수 있다 */
+  async action(kind: 'start' | 'reset', key: string): Promise<void> {
+    await this.post(kind, { key });
   }
 
   /** 같은 링크에서 설정을 바꾼다. 서버가 새 시드로 대기 상태를 만들어 모두에게 알린다 */
@@ -189,12 +186,12 @@ export class RoomClient {
     await this.post('config', { key, config, slack });
   }
 
-  /** 추첨 링크를 방의 Slack 채널에 올린다 */
-  async notifySlack(key: string, summary: string): Promise<void> {
+  /** 추첨 링크를 방의 Slack 채널에 올린다. mapTitle 은 알림 카드의 맵 칸에 쓴다 */
+  async notifySlack(key: string, mapTitle: string): Promise<void> {
     const res = await fetch(`${this.roomUrl}/notify`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ key, summary }),
+      body: JSON.stringify({ key, mapTitle }),
     });
     if (!res.ok) return failFrom(res);
   }
@@ -202,13 +199,13 @@ export class RoomClient {
   /** 결과 캡처와 당첨자를 올린다. 서버가 라운드마다 한 번만 Slack 에 알린다 */
   async reportResult(
     key: string,
-    report: { round: number; winners: string[]; summary: string; image: Blob | null }
+    report: { round: number; winners: string[]; mapTitle: string; image: Blob | null }
   ): Promise<void> {
     const form = new FormData();
     form.set('key', key);
     form.set('round', String(report.round));
     form.set('winners', JSON.stringify(report.winners));
-    form.set('summary', report.summary);
+    form.set('mapTitle', report.mapTitle);
     if (report.image) form.set('image', report.image, `result-${report.round}.jpg`);
     const res = await fetch(`${this.roomUrl}/result`, { method: 'POST', body: form });
     if (!res.ok) return failFrom(res);

@@ -40,6 +40,11 @@ const MAX_MAP_INDEX = 4;
 const MAX_IMAGE_BYTES = 1_500_000;
 /** Slack 메시지에 이름을 이만큼만 나열한다 */
 const MAX_LISTED_NAMES = 40;
+/** Slack 카드 왼쪽 띠 색: 링크 파랑, 출발 초록, 결과 주황 */
+const CARD_COLOR = { link: '#378ADD', start: '#1D9E75', result: '#EF9F27' } as const;
+/** Slack 블록 글자 수 한도: header 150자, section 3000자 */
+const MAX_HEADER_CHARS = 150;
+const MAX_SECTION_CHARS = 3000;
 
 function randomToken(len: number): string {
   const bytes = new Uint8Array(len);
@@ -83,6 +88,61 @@ function bareName(nameStr: string): string {
 /** Slack mrkdwn 에서 특수한 의미를 갖는 문자를 바꾼다 */
 function esc(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** 당첨 방식 짧은 표기. 클라이언트 winnerShort 와 같은 규칙 */
+function winnerLabel(w: WinnerSetting): string {
+  switch (w.type) {
+    case 'first':
+      return `앞에서 ${w.end}명`;
+    case 'last':
+      return `뒤에서 ${w.end}명`;
+    case 'custom':
+      return `${w.start}등`;
+    case 'multi':
+      return w.start === w.end ? `${w.start}등` : `${w.start}~${w.end}등`;
+    default: {
+      const _exhaustive: never = w.type;
+      return _exhaustive;
+    }
+  }
+}
+
+/** 참가자 줄: 같은 이름은 구슬 수를 합쳐 "이름 ×2" 로 쓰고, 처음 나온 순서로 MAX_LISTED_NAMES 명까지 */
+function participantsText(names: string[]): string {
+  // 이름별 구슬 수 = 그 이름 줄들을 이름 문법(*N)으로 센 수의 합
+  const counts = new Map<string, number>();
+  for (const n of names) {
+    const name = bareName(n);
+    counts.set(name, (counts.get(name) ?? 0) + countMarbles([n]));
+  }
+  const entries = [...counts];
+  const listed = entries
+    .slice(0, MAX_LISTED_NAMES)
+    .map(([name, count]) => (count > 1 ? `${esc(name)} ×${count}` : esc(name)))
+    .join(' · ');
+  const more = entries.length > MAX_LISTED_NAMES ? ` 외 ${entries.length - MAX_LISTED_NAMES}명` : '';
+  return listed + more;
+}
+
+/** 주최자 화면이 보낸 맵 이름. 없으면 빈 문자열이고 알림에서 맵 칸을 뺀다 */
+function mapTitleOf(raw: unknown): string {
+  return typeof raw === 'string' ? raw.trim().slice(0, 40) : '';
+}
+
+/** 왼쪽에 색 띠가 있는 카드 메시지. text 는 알림 미리보기에 쓰인다 */
+function card(color: string, text: string, blocks: object[]): object {
+  return { text, attachments: [{ color, blocks }] };
+}
+
+/** 큰 제목. plain_text 라 이름을 escape 하지 않는다 */
+function headerBlock(text: string): object {
+  return { type: 'header', text: { type: 'plain_text', text: text.slice(0, MAX_HEADER_CHARS), emoji: true } };
+}
+
+/** 작은 회색 글씨 줄 */
+function contextBlock(mrkdwn: string): object {
+  return { type: 'context', elements: [{ type: 'mrkdwn', text: mrkdwn }] };
 }
 
 /** 설정 검증. 잘못됐으면 이유 문자열 */
@@ -186,11 +246,6 @@ export class Room extends DurableObject<Env> {
     return `${this.env.SITE_URL}#${id}`;
   }
 
-  private summaryOf(state: RoomState, raw: unknown): string {
-    const fromHost = typeof raw === 'string' ? raw.trim().slice(0, 200) : '';
-    return fromHost || `${countMarbles(state.names)}명 추첨`;
-  }
-
   /** 알림 대상을 저장하거나 지우고, 상태에는 채널 이름만 남긴다 */
   private async applySlack(state: RoomState, slack: SlackTarget | null | undefined): Promise<void> {
     if (slack === undefined) return;
@@ -255,43 +310,40 @@ export class Room extends DurableObject<Env> {
   }
 
   /** 출발 알림. 시작 응답을 늦추지 않도록 뒤에서 보낸다 */
-  private notifyStart(state: RoomState, summary: string): void {
+  private notifyStart(state: RoomState): void {
     if (!state.slackChannel) return;
     const link = this.roomUrl(state.id);
     this.ctx.waitUntil(
-      this.notify({
-        text: `구슬 레이스 출발! ${link}`,
-        blocks: [
+      this.notify(
+        card(CARD_COLOR.start, '🏁 구슬 레이스 출발!', [
           {
             type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*▶ 구슬 레이스 출발!*\n${esc(summary)}\n<${link}|지금 링크를 열면> 진행 중인 장면부터 볼 수 있습니다.`,
-            },
+            text: { type: 'mrkdwn', text: `🏁 *출발!* 지금 열면 진행 중인 장면부터 볼 수 있어요 · <${link}|보러 가기>` },
           },
-        ],
-      }).then(() => undefined)
+        ])
+      ).then(() => undefined)
     );
   }
 
   /** 링크 알림: 주최자가 "Slack 에 보내기"를 눌렀을 때 */
-  private async notifyLink(state: RoomState, summary: string): Promise<Response> {
+  private async notifyLink(state: RoomState, mapTitle: string): Promise<Response> {
     const link = this.roomUrl(state.id);
-    const people = [...new Set(state.names.map(bareName))];
-    const listed = people.slice(0, MAX_LISTED_NAMES).map(esc).join(', ');
-    const more = people.length > MAX_LISTED_NAMES ? ` 외 ${people.length - MAX_LISTED_NAMES}명` : '';
-    const sent = await this.notify({
-      text: `구슬 레이스 추첨: ${link}`,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*🎱 구슬 레이스 추첨이 열렸습니다*\n${esc(summary)}\n참가자: ${listed}${more}\n<${link}|링크를 열어 두면> 주최자가 시작할 때 모두 같이 출발합니다.`,
-          },
-        },
-      ],
-    });
+    const label = winnerLabel(state.winner);
+    const total = countMarbles(state.names);
+    const fields = [
+      { type: 'mrkdwn', text: `*당첨*\n${label}` },
+      { type: 'mrkdwn', text: `*참가*\n${total}명` },
+    ];
+    if (mapTitle) fields.push({ type: 'mrkdwn', text: `*맵*\n${esc(mapTitle)}` });
+    const sent = await this.notify(
+      card(CARD_COLOR.link, `🎱 구슬 레이스 추첨이 열렸어요 · ${total}명 중 ${label}`, [
+        headerBlock('🎱 구슬 레이스 추첨이 열렸어요'),
+        { type: 'section', fields },
+        { type: 'section', text: { type: 'mrkdwn', text: participantsText(state.names) } },
+        { type: 'section', text: { type: 'mrkdwn', text: `👉 *<${link}|추첨 보러 가기>*` } },
+        contextBlock('링크를 열어 두면 주최자가 시작할 때 다 같이 출발해요'),
+      ])
+    );
     return sent.ok ? json({ ok: true }) : json({ error: sent.message }, 502);
   }
 
@@ -327,22 +379,28 @@ export class Room extends DurableObject<Env> {
     }
 
     const link = this.roomUrl(state.id);
-    const roundText = round > 1 ? ` · ${round}번째 추첨` : '';
-    const blocks: object[] = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*🏆 구슬 레이스 결과*\n당첨: ${winners.map((w) => `*${esc(w)}*`).join(', ')}\n${esc(this.summaryOf(state, form.get('summary')))}${roundText}`,
-        },
-      },
-    ];
-    if (imageUrl) blocks.push({ type: 'image', image_url: imageUrl, alt_text: `당첨: ${winners.join(', ')}` });
-    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `<${link}|같은 링크 열기>` }] });
+    const winnerText = winners.join(', ');
+    const headline = `🏆 당첨: ${winnerText}`;
+    // 제목 한도 안에 들어감 여부: 넘치면 제목에는 인원만, 이름은 본문에 쓴다
+    const headlineFits = headline.length <= MAX_HEADER_CHARS;
+    const blocks: object[] = headlineFits
+      ? [headerBlock(headline)]
+      : [
+          headerBlock(`🏆 당첨 ${winners.length}명`),
+          { type: 'section', text: { type: 'mrkdwn', text: winners.map(esc).join(', ').slice(0, MAX_SECTION_CHARS) } },
+        ];
+    // 요약 줄: "7명 중 뒤에서 2명 · 맵 이름 · 2번째 추첨". 맵 이름이 없거나 첫 추첨이면 그 칸을 뺀다
+    const meta = [`${countMarbles(state.names)}명 중 ${winnerLabel(state.winner)}`];
+    const mapTitle = mapTitleOf(form.get('mapTitle'));
+    if (mapTitle) meta.push(esc(mapTitle));
+    if (round > 1) meta.push(`${round}번째 추첨`);
+    blocks.push(contextBlock(meta.join(' · ')));
+    if (imageUrl) blocks.push({ type: 'image', image_url: imageUrl, alt_text: `당첨: ${winnerText}`.slice(0, 2000) });
+    blocks.push(contextBlock(`<${link}|같은 링크에서 다시 보기>`));
 
     // 먼저 표시해 두어 동시에 들어온 보고가 두 번 알리지 않게 하고, 실패하면 되돌린다
     await this.ctx.storage.put(postedKey, true);
-    const sent = await this.notify({ text: `구슬 레이스 결과: ${winners.join(', ')}`, blocks });
+    const sent = await this.notify(card(CARD_COLOR.result, headline, blocks));
     if (!sent.ok) {
       await this.ctx.storage.delete(postedKey);
       return json({ error: sent.message }, 502);
@@ -376,9 +434,8 @@ export class Room extends DurableObject<Env> {
         key?: unknown;
         config?: unknown;
         slack?: unknown;
-        summary?: unknown;
       };
-      const { key: hostKeyGiven, summary } = body;
+      const { key: hostKeyGiven } = body;
       let config: RoomConfig | undefined;
       let slack: SlackTarget | null | undefined;
       if (action === 'config') {
@@ -392,19 +449,19 @@ export class Room extends DurableObject<Env> {
       const wasWaiting = action === 'start' && (await this.load())?.state.startAt === null;
       const result = await this.applyAction(action, hostKeyGiven, config, slack);
       if (!result.ok) return json({ error: result.message }, result.status);
-      if (wasWaiting) this.notifyStart(result.state, this.summaryOf(result.state, summary));
+      if (wasWaiting) this.notifyStart(result.state);
       return json({ room: result.state, serverNow: Date.now(), count: this.viewerCount() });
     }
 
     if (request.method === 'POST' && action === 'notify') {
-      const { key: hostKeyGiven, summary } = (await request.json().catch(() => ({}))) as {
+      const { key: hostKeyGiven, mapTitle } = (await request.json().catch(() => ({}))) as {
         key?: unknown;
-        summary?: unknown;
+        mapTitle?: unknown;
       };
       const loaded = await this.load();
       if (!loaded) return json({ error: '방이 만료됐습니다' }, 404);
       if (hostKeyGiven !== loaded.hostKey) return json({ error: '주최자만 할 수 있습니다' }, 403);
-      return this.notifyLink(loaded.state, this.summaryOf(loaded.state, summary));
+      return this.notifyLink(loaded.state, mapTitleOf(mapTitle));
     }
 
     if (request.method === 'POST' && action === 'result') {

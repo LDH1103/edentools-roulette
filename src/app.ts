@@ -789,10 +789,14 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     ].join('\n');
   }
 
-  /** 한 줄 요약. 화면과 Slack 알림에 같이 쓴다 */
+  /** 지금 맵의 한국어 이름. 방 요약과 Slack 알림에 쓴다 */
+  function currentMapTitle(): string {
+    return translate(roulette.getCurrentMap()?.title ?? '');
+  }
+
+  /** 방 화면의 한 줄 요약 */
   function summaryText(s: RoomState): string {
-    const mapTitle = translate(roulette.getCurrentMap()?.title ?? '');
-    return `${roulette.getCount()}명 중 ${winnerShort(s.winner)} 당첨 · ${mapTitle}`;
+    return `${roulette.getCount()}명 중 ${winnerShort(s.winner)} 당첨 · ${currentMapTitle()}`;
   }
 
   /** 새 라운드(처음, 다시 추첨, 설정 수정): 설정·시드로 구슬을 놓는다 */
@@ -950,7 +954,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     await new Promise((resolve) => window.setTimeout(resolve, RESULT_CAPTURE_DELAY_MS));
     try {
       const image = await roulette.captureFrame();
-      await client.reportResult(hostKey, { round, winners, summary: summaryText(s), image });
+      await client.reportResult(hostKey, { round, winners, mapTitle: currentMapTitle(), image });
       toast(`${s.slackChannel}에 결과를 보냈습니다.`, 3000);
     } catch (e) {
       reportedRounds.delete(round);
@@ -974,7 +978,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     if (!hostKey || !s?.slackChannel) return;
     btnSlackNotify.disabled = true;
     try {
-      await client.notifySlack(hostKey, summaryText(s));
+      await client.notifySlack(hostKey, currentMapTitle());
       toast(`${s.slackChannel}에 추첨 링크를 보냈습니다.`, 3000);
     } catch (e) {
       toast(`Slack 에 보내지 못했습니다. ${friendlyError(e)}`, 4500);
@@ -988,7 +992,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     if (!hostKey || !s) return;
     btnStart.disabled = true;
     try {
-      await client.action('start', hostKey, summaryText(s));
+      await client.action('start', hostKey);
     } catch (e) {
       toast(`시작하지 못했습니다. ${friendlyError(e)}`, 3500);
     } finally {
