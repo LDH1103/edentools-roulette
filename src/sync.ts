@@ -26,7 +26,12 @@ export type RoomState = RoomConfig & {
   startAt: number | null;
   /** 다시 추첨할 때마다 1씩 는다 */
   round: number;
+  /** Slack 알림 채널 이름. 알림을 안 보내면 null. Webhook 주소는 서버에만 있다 */
+  slackChannel: string | null;
 };
+
+/** 주최자 브라우저에 저장해 두고 추첨마다 고르는 Slack 알림 대상 */
+export type SlackTarget = { channel: string; webhook: string };
 
 /** connecting: 처음 붙는 중, online: 실시간, polling: WebSocket 대신 주기 조회, reconnecting: 끊겨서 다시 붙는 중 */
 export type ConnState = 'connecting' | 'online' | 'polling' | 'reconnecting';
@@ -66,12 +71,13 @@ async function failFrom(res: Response): Promise<never> {
 
 export async function createRoom(
   apiBase: string,
-  config: RoomConfig
+  config: RoomConfig,
+  slack: SlackTarget | null
 ): Promise<{ id: string; hostKey: string; state: RoomState }> {
   const res = await fetch(`${apiBase}/rooms`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(config),
+    body: JSON.stringify({ ...config, slack }),
   });
   if (!res.ok) return failFrom(res);
   return res.json();
@@ -160,14 +166,42 @@ export class RoomClient {
     await this.getRoom();
   }
 
-  /** 주최자 동작은 HTTP 로 보낸다. WebSocket 이 막힌 환경에서도 시작할 수 있다 */
-  async action(kind: 'start' | 'reset', key: string): Promise<void> {
-    await this.post(kind, { key });
+  /**
+   * 주최자 동작은 HTTP 로 보낸다. WebSocket 이 막힌 환경에서도 시작할 수 있다.
+   * summary 는 Slack 출발 알림에 쓰는 한 줄 요약
+   */
+  async action(kind: 'start' | 'reset', key: string, summary?: string): Promise<void> {
+    await this.post(kind, { key, summary });
   }
 
   /** 같은 링크에서 설정을 바꾼다. 서버가 새 시드로 대기 상태를 만들어 모두에게 알린다 */
-  async updateConfig(key: string, config: RoomConfig): Promise<void> {
-    await this.post('config', { key, config });
+  async updateConfig(key: string, config: RoomConfig, slack: SlackTarget | null): Promise<void> {
+    await this.post('config', { key, config, slack });
+  }
+
+  /** 추첨 링크를 방의 Slack 채널에 올린다 */
+  async notifySlack(key: string, summary: string): Promise<void> {
+    const res = await fetch(`${this.roomUrl}/notify`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key, summary }),
+    });
+    if (!res.ok) return failFrom(res);
+  }
+
+  /** 결과 캡처와 당첨자를 올린다. 서버가 라운드마다 한 번만 Slack 에 알린다 */
+  async reportResult(
+    key: string,
+    report: { round: number; winners: string[]; summary: string; image: Blob | null }
+  ): Promise<void> {
+    const form = new FormData();
+    form.set('key', key);
+    form.set('round', String(report.round));
+    form.set('winners', JSON.stringify(report.winners));
+    form.set('summary', report.summary);
+    if (report.image) form.set('image', report.image, `result-${report.round}.jpg`);
+    const res = await fetch(`${this.roomUrl}/result`, { method: 'POST', body: form });
+    if (!res.ok) return failFrom(res);
   }
 
   private async post(path: 'start' | 'reset' | 'config', payload: object): Promise<void> {

@@ -28,6 +28,8 @@ const MAX_TICKS_PER_FRAME = 600;
 const GOAL_REMOVE_TICKS = 50;
 /** 출발 후 이 틱(10분)이 지나면 시간을 멈춘다. 한참 뒤에 링크를 연 사람이 끝없이 따라잡지 않도록 */
 const RUN_TICK_LIMIT = 60000;
+/** 탭이 숨었을 때 프레임을 대신 돌리는 간격(ms) */
+const BACKGROUND_FRAME_MS = 250;
 
 /** 입력 범위를 실제 구슬 수에 맞춰 자른다. 범위를 넘기면 뒤쪽이 잘린다 */
 function clipWinnerRange({ start, end }: WinnerRange, marbleCount: number): WinnerRange {
@@ -128,6 +130,10 @@ export class Roulette extends EventTarget {
       this._init().then(() => {
         this._isReady = true;
         this._update();
+        // 숨은 탭은 rAF 가 멈춘다. 브라우저가 타이머를 1초 간격으로 늦춰도 프레임당 따라잡기로 시계를 맞춘다
+        window.setInterval(() => {
+          if (document.hidden) this._frame();
+        }, BACKGROUND_FRAME_MS);
       });
     });
   }
@@ -151,6 +157,15 @@ export class Roulette extends EventTarget {
 
   @bound
   private _update() {
+    this._frame();
+    window.requestAnimationFrame(this._update);
+  }
+
+  /**
+   * 한 프레임: 시계에 맞춰 물리 틱을 진행하고 그린다. 평소에는 rAF 가 부르고, 탭이 숨으면 rAF 가 멈추므로
+   * 타이머가 대신 부른다. 주최자가 Slack 으로 탭을 옮겨도 레이스가 끝나야 결과 알림이 바로 나간다
+   */
+  private _frame() {
     const now = Date.now();
     if (!this._lastTime) this._lastTime = now;
     const frameMs = Math.min(1000, now - this._lastTime);
@@ -201,7 +216,18 @@ export class Roulette extends EventTarget {
     }
 
     this._render();
-    window.requestAnimationFrame(this._update);
+  }
+
+  /** 지금 화면(결과 팝업 포함)을 JPEG 로 찍는다. 너무 크면 maxWidth 로 줄인다 */
+  public captureFrame(maxWidth = 1280): Promise<Blob | null> {
+    this._render();
+    const src = this._renderer.canvas;
+    const scale = Math.min(1, maxWidth / src.width);
+    const out = document.createElement('canvas');
+    out.width = Math.round(src.width * scale);
+    out.height = Math.round(src.height * scale);
+    out.getContext('2d')?.drawImage(src, 0, 0, out.width, out.height);
+    return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', 0.85));
   }
 
   /**

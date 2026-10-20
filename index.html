@@ -91,6 +91,21 @@
         <label class="toggle" id="setupRecordWrap" for="chkAutoRecording"><i class="icon record" aria-hidden="true"></i>녹화 <input type="checkbox" class="switch" id="chkAutoRecording" /></label>
         <button type="button" class="btn-theme" title="테마 바꾸기" aria-label="테마 바꾸기">☀</button>
       </div>
+      <div class="opt-row">
+        <label class="opt-label" for="sltSlack"><span class="slack-mark" aria-hidden="true">#</span>알림</label>
+        <select id="sltSlack"></select>
+        <button type="button" class="small" id="btnSlackRemove" hidden>삭제</button>
+      </div>
+      <div class="opt-sub slack-add" id="slackAdd" hidden>
+        <input type="text" id="slackChannelName" maxlength="40" placeholder="채널 이름 (예: #점심)" aria-label="채널 이름" />
+        <input type="url" id="slackWebhook" spellcheck="false" placeholder="Slack Incoming Webhook 주소" aria-label="Slack Webhook 주소" />
+        <div class="row-buttons">
+          <button type="button" class="small" id="btnSlackSave">추가</button>
+          <button type="button" class="small" id="btnSlackCancel">취소</button>
+          <a class="hint" href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Webhook 주소 만드는 법</a>
+        </div>
+      </div>
+      <p class="winner-summary" id="slackSummary" hidden>링크·출발·결과(화면 캡처 포함)를 이 채널에 알립니다.</p>
     </div>
   </section>
 
@@ -122,7 +137,10 @@
       <input type="text" id="shareUrl" readonly />
       <button type="button" id="btnCopyLink">복사</button>
     </div>
-    <button type="button" class="small" id="btnCopySlack">Slack 안내 문구 복사</button>
+    <div class="row-buttons">
+      <button type="button" class="small" id="btnCopySlack">Slack 안내 문구 복사</button>
+      <button type="button" class="small slack" id="btnSlackNotify" hidden>Slack에 보내기</button>
+    </div>
   </div>
 
   <p class="room-note" id="roomNote"></p>

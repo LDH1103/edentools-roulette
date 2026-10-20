@@ -8,6 +8,8 @@ routes = [
 
 [vars]
 ALLOWED_ORIGINS = "https://roulette.edentools.dev,http://localhost:1235,http://127.0.0.1:1235"
+API_ORIGIN = "https://roulette-api.edentools.dev"
+SITE_URL = "https://roulette.edentools.dev/"
 
 [[durable_objects.bindings]]
 name = "ROOM"

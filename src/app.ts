@@ -5,7 +5,15 @@ import { translate } from './localization';
 import { initMapSelector } from './mapSelector';
 import options from './options';
 import type { Roulette } from './roulette';
-import { type ConnState, createRoom, RoomClient, type RoomConfig, type RoomState, type WinnerSetting } from './sync';
+import {
+  type ConnState,
+  createRoom,
+  RoomClient,
+  type RoomConfig,
+  type RoomState,
+  type SlackTarget,
+  type WinnerSetting,
+} from './sync';
 
 const IS_LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 const API_BASE =
@@ -21,6 +29,11 @@ const EXAMPLE_NAMES = '수박*2\n키위*2\n귤*2';
 const ROOM_ID = /^[A-Z2-9]{6}$/;
 /** 결과가 나온 뒤 방 패널을 다시 띄우기까지(ms). 원작처럼 당첨 연출을 먼저 보여 준다 */
 const RESULT_PANEL_DELAY_MS = 2500;
+/** 결과 팝업이 그려진 뒤에 캡처하도록 기다리는 시간(ms) */
+const RESULT_CAPTURE_DELAY_MS = 1500;
+const SLACK_HOOKS_KEY = 'er_slack_hooks';
+const SLACK_LAST_KEY = 'er_slack_last';
+const SLACK_ADD = '__add';
 
 function $<T extends HTMLElement = HTMLElement>(selector: string): T {
   const el = document.querySelector<T>(selector);
@@ -205,18 +218,20 @@ export function initApp(roulette: Roulette): void {
 // 설정 폼: 처음 링크를 만들 때와 방에서 설정을 고칠 때 같이 쓴다
 // ---------------------------------------------------------------------------
 type EditHandlers = {
-  save: (config: RoomConfig) => Promise<void>;
+  save: (config: RoomConfig, slack: SlackTarget | null) => Promise<void>;
   cancel: () => void;
 };
 
 type SettingsForm = {
   getConfig: () => RoomConfig;
+  /** 고른 Slack 알림 채널. 알림을 안 보내면 null */
+  getSlack: () => SlackTarget | null;
   getNames: () => string[];
   showError: (msg: string | null) => void;
   /** 입력값으로 당첨 범위를 다시 계산해 구슬에 반영한다 */
   applyWinner: () => void;
   /** 방 설정을 폼에 채우고 미리보기 구슬을 놓는다 */
-  load: (config: RoomConfig) => void;
+  load: (config: RoomConfig, slackChannel: string | null) => void;
   /** setup: 혼자 돌리기·공유 링크 만들기, edit: 취소·변경 저장 */
   setMode: (mode: 'setup' | 'edit', handlers?: EditHandlers) => void;
 };
@@ -238,6 +253,16 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   const chkRecording = $<HTMLInputElement>('#chkAutoRecording');
   const errorEl = $('#setupError');
   const countEl = $('#marbleCount');
+  const slackSelect = $<HTMLSelectElement>('#sltSlack');
+  let slackHooks: SlackTarget[] = [];
+  try {
+    const v = JSON.parse(storageGet(SLACK_HOOKS_KEY) ?? '[]');
+    if (Array.isArray(v)) {
+      slackHooks = v.filter((h) => h && typeof h.channel === 'string' && typeof h.webhook === 'string');
+    }
+  } catch {
+    slackHooks = [];
+  }
 
   let winner: WinnerSetting = { type: 'first', start: 1, end: 1 };
   try {
@@ -300,7 +325,9 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     }
     $('#winnerSummary').textContent = winnerSentence(winner);
     const mapTitle = $<HTMLSelectElement>('#sltMap').selectedOptions[0]?.textContent ?? '';
-    $('#settingsSummary').textContent = `설정 · ${winnerShort(winner)}${mapTitle ? ` · ${mapTitle}` : ''}`;
+    const slack = getSlack();
+    $('#settingsSummary').textContent =
+      `설정 · ${winnerShort(winner)}${mapTitle ? ` · ${mapTitle}` : ''}${slack ? ` · 알림 ${slack.channel}` : ''}`;
   }
 
   function applyWinner(edited?: 'start' | 'end') {
@@ -459,6 +486,81 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     getReady();
   });
 
+  // ----- Slack 알림 채널: Webhook 주소를 채널 이름과 함께 이 브라우저에 저장해 두고 추첨마다 고른다 -----
+  const slackAdd = $('#slackAdd');
+  const slackName = $<HTMLInputElement>('#slackChannelName');
+  const slackUrl = $<HTMLInputElement>('#slackWebhook');
+  const slackRemove = $('#btnSlackRemove');
+
+  function getSlack(): SlackTarget | null {
+    const i = Number(slackSelect.value);
+    const picked = slackSelect.value !== '' && Number.isInteger(i);
+    return picked ? (slackHooks[i] ?? null) : null;
+  }
+
+  function syncSlackControls() {
+    const chosen = getSlack();
+    slackRemove.hidden = !chosen;
+    $('#slackSummary').hidden = !chosen;
+    storageSet(SLACK_LAST_KEY, chosen?.channel ?? '');
+    renderWinnerInputs();
+  }
+
+  function renderSlack(selectedChannel: string | null) {
+    slackSelect.replaceChildren(
+      new Option('보내지 않음', ''),
+      ...slackHooks.map((h, i) => new Option(h.channel, String(i))),
+      new Option('+ 채널 추가…', SLACK_ADD)
+    );
+    const index = selectedChannel === null ? -1 : slackHooks.findIndex((h) => h.channel === selectedChannel);
+    slackSelect.value = index >= 0 ? String(index) : '';
+    syncSlackControls();
+  }
+
+  slackSelect.addEventListener('change', () => {
+    if (slackSelect.value === SLACK_ADD) {
+      slackSelect.value = '';
+      slackAdd.hidden = false;
+      slackName.focus();
+    }
+    syncSlackControls();
+  });
+  $('#btnSlackCancel').addEventListener('click', () => {
+    slackAdd.hidden = true;
+    showError(null);
+  });
+  $('#btnSlackSave').addEventListener('click', () => {
+    const webhook = slackUrl.value.trim();
+    // 로컬 개발에서는 가짜 Slack 서버(127.0.0.1)로도 시험할 수 있다
+    const isHook =
+      /^https:\/\/hooks\.slack\.com\/services\//.test(webhook) ||
+      (IS_LOCAL && /^http:\/\/127\.0\.0\.1:\d+\//.test(webhook));
+    if (!isHook) {
+      showError(
+        'Slack Webhook 주소는 https://hooks.slack.com/services/ 로 시작합니다. Slack 앱의 Incoming Webhooks 에서 복사하세요.'
+      );
+      return;
+    }
+    const channel = slackName.value.trim().slice(0, 40) || '알림 채널';
+    // 같은 이름으로 다시 넣으면 주소를 바꾼다
+    slackHooks = [...slackHooks.filter((h) => h.channel !== channel), { channel, webhook }];
+    storageSet(SLACK_HOOKS_KEY, JSON.stringify(slackHooks));
+    slackName.value = '';
+    slackUrl.value = '';
+    slackAdd.hidden = true;
+    showError(null);
+    renderSlack(channel);
+    toast(`${channel} 채널을 저장했습니다.`);
+  });
+  slackRemove.addEventListener('click', () => {
+    const chosen = getSlack();
+    if (!chosen || !window.confirm(`${chosen.channel} 채널을 목록에서 지울까요?`)) return;
+    slackHooks = slackHooks.filter((h) => h.channel !== chosen.channel);
+    storageSet(SLACK_HOOKS_KEY, JSON.stringify(slackHooks));
+    renderSlack(null);
+  });
+  renderSlack(storageGet(SLACK_LAST_KEY) || null);
+
   // ----- 방에서 설정 수정 -----
   let editHandlers: EditHandlers | null = null;
   const editSave = $<HTMLButtonElement>('#btnEditSave');
@@ -473,7 +575,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     editSave.disabled = true;
     editSave.textContent = '저장 중…';
     try {
-      await editHandlers.save(getConfig());
+      await editHandlers.save(getConfig(), getSlack());
     } catch (e) {
       showError(`저장하지 못했습니다. ${friendlyError(e)}`);
     } finally {
@@ -491,7 +593,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     };
   }
 
-  function load(config: RoomConfig) {
+  function load(config: RoomConfig, slackChannel: string | null) {
     namesInput.value = config.names.join('\n');
     namesInput.scrollTop = 0;
     $<HTMLSelectElement>('#sltMap').value = String(config.map);
@@ -499,7 +601,8 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     options.useSkills = config.useSkills;
     chkSkill.checked = config.useSkills;
     winner = normalizeWinner(config.winner);
-    renderWinnerInputs();
+    slackAdd.hidden = true;
+    renderSlack(slackChannel);
     getReady();
     showError(null);
   }
@@ -517,7 +620,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   }
 
   getReady();
-  return { getConfig, getNames, showError, applyWinner: () => applyWinner(), load, setMode };
+  return { getConfig, getSlack, getNames, showError, applyWinner: () => applyWinner(), load, setMode };
 }
 
 // ---------------------------------------------------------------------------
@@ -562,7 +665,7 @@ function setupMode(roulette: Roulette): void {
     createBtn.disabled = true;
     createBtn.textContent = '링크 만드는 중…';
     try {
-      const { id, hostKey } = await createRoom(API_BASE, config);
+      const { id, hostKey } = await createRoom(API_BASE, config, form.getSlack());
       storageSet(hostKeyName(id), hostKey);
       // 새로고침 없이 방 화면으로 넘어간다. 주소창에는 공유할 링크가 남는다
       roulette.removeEventListener('goal', onGoal);
@@ -638,6 +741,12 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     ].join('\n');
   }
 
+  /** 한 줄 요약. 화면과 Slack 알림에 같이 쓴다 */
+  function summaryText(s: RoomState): string {
+    const mapTitle = translate(roulette.getCurrentMap()?.title ?? '');
+    return `${roulette.getCount()}명 중 ${winnerShort(s.winner)} 당첨 · ${mapTitle}`;
+  }
+
   /** 새 라운드(처음, 다시 추첨, 설정 수정): 설정·시드로 구슬을 놓는다 */
   function setupRound(s: RoomState) {
     lastRound = s.round;
@@ -648,8 +757,9 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     roulette.setMap(s.map);
     roulette.setMarbles(s.names, s.seed);
     applyWinnerSetting(roulette, s.winner);
-    const mapTitle = translate(roulette.getCurrentMap()?.title ?? '');
-    $('#roomSummary').textContent = `${roulette.getCount()}명 중 ${winnerShort(s.winner)} 당첨 · ${mapTitle}`;
+    $('#roomSummary').textContent = `${summaryText(s)}${s.slackChannel ? ` · 알림 ${s.slackChannel}` : ''}`;
+    const notifyBtn = $('#btnSlackNotify');
+    notifyBtn.textContent = s.slackChannel ? `${s.slackChannel}에 보내기` : 'Slack에 보내기';
   }
 
   function applyState(s: RoomState) {
@@ -676,6 +786,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
   const recordWrap = $('#roomRecordWrap');
   const noteEl = $('#roomNote');
   const btnEdit = $<HTMLButtonElement>('#btnHostEdit');
+  const btnSlackNotify = $<HTMLButtonElement>('#btnSlackNotify');
   const settingsEl = $('#settings');
 
   // ----- 설정 수정: 같은 폼을 방 설정으로 채워 연다. 저장하면 서버가 새 라운드를 모두에게 보낸다 -----
@@ -689,8 +800,8 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     if (!s || !hostKey) return;
     const form = getSettingsForm(roulette);
     form.setMode('edit', {
-      save: async (config) => {
-        await client.updateConfig(hostKey, config);
+      save: async (config, slack) => {
+        await client.updateConfig(hostKey, config, slack);
         closeEditor();
         toast('설정을 바꿨습니다. 보는 사람 화면에도 바로 적용됩니다.', 3000);
       },
@@ -701,7 +812,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
         if (client.state) applyState(client.state);
       },
     });
-    form.load(s);
+    form.load(s, s.slackChannel);
     panel.hidden = true;
     overlay.hidden = true;
     settingsEl.classList.remove('hide');
@@ -727,6 +838,7 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     // 원작 설정창처럼 레이스 중에는 숨긴다. 카운트다운 중에는 주최자가 잘못 누른 시작을 멈출 수 있게 둔다
     panel.classList.toggle('hide', !(waiting || countdown || resultShown));
     hostShare.hidden = !(isHost && waiting);
+    btnSlackNotify.hidden = !s.slackChannel;
     btnCopyLinkSmall.hidden = isHost && waiting;
     recordWrap.hidden = !waiting;
     btnStart.hidden = !(isHost && waiting);
@@ -765,9 +877,29 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
   client.connect();
   window.setInterval(render, 100);
 
+  /** Slack 에 결과를 보낸 라운드. 수정 취소로 같은 라운드를 다시 따라잡아도 두 번 보내지 않는다 */
+  const reportedRounds = new Set<number>();
+
+  /** 결과 팝업이 그려진 뒤 화면을 찍어 당첨자와 함께 올린다. 서버가 Slack 에 알린다 */
+  async function reportResult(round: number, winners: string[]) {
+    const s = client.state;
+    if (!hostKey || !s?.slackChannel || reportedRounds.has(round)) return;
+    reportedRounds.add(round);
+    await new Promise((resolve) => window.setTimeout(resolve, RESULT_CAPTURE_DELAY_MS));
+    try {
+      const image = await roulette.captureFrame();
+      await client.reportResult(hostKey, { round, winners, summary: summaryText(s), image });
+      toast(`${s.slackChannel}에 결과를 보냈습니다.`, 3000);
+    } catch (e) {
+      reportedRounds.delete(round);
+      toast(`Slack 에 결과를 보내지 못했습니다. ${friendlyError(e)}`, 4500);
+    }
+  }
+
   roulette.addEventListener('goal', (e) => {
     const winners = (e as CustomEvent<{ winners: string[] }>).detail.winners;
     toast(`당첨: ${winners.join(', ')}`, 5000);
+    void reportResult(lastRound, winners);
     window.clearTimeout(resultTimer);
     resultTimer = window.setTimeout(() => {
       resultShown = true;
@@ -775,11 +907,26 @@ async function enterRoom(roulette: Roulette, id: string, hostKey: string | null)
     }, RESULT_PANEL_DELAY_MS);
   });
 
+  btnSlackNotify.addEventListener('click', async () => {
+    const s = client.state;
+    if (!hostKey || !s?.slackChannel) return;
+    btnSlackNotify.disabled = true;
+    try {
+      await client.notifySlack(hostKey, summaryText(s));
+      toast(`${s.slackChannel}에 추첨 링크를 보냈습니다.`, 3000);
+    } catch (e) {
+      toast(`Slack 에 보내지 못했습니다. ${friendlyError(e)}`, 4500);
+    } finally {
+      btnSlackNotify.disabled = false;
+    }
+  });
+
   btnStart.addEventListener('click', async () => {
-    if (!hostKey) return;
+    const s = client.state;
+    if (!hostKey || !s) return;
     btnStart.disabled = true;
     try {
-      await client.action('start', hostKey);
+      await client.action('start', hostKey, summaryText(s));
     } catch (e) {
       toast(`시작하지 못했습니다. ${friendlyError(e)}`, 3500);
     } finally {

@@ -190,7 +190,8 @@ div.copyright a {
   textarea,
   select,
   input[type='number'],
-  input[type='text'] {
+  input[type='text'],
+  input[type='url'] {
     font: inherit;
     color: #111;
     background: #999;
@@ -458,6 +459,25 @@ div.copyright a {
     }
   }
 
+  .slack-mark {
+    width: 18px;
+    text-align: center;
+    font-size: 13pt;
+  }
+
+  .slack-add {
+    input {
+      flex: 1 1 100%;
+      min-width: 0;
+      height: 30px;
+      padding: 0 8px;
+    }
+
+    .row-buttons a {
+      color: #e2e2e2;
+    }
+  }
+
   .actions {
     grid-area: actions;
     display: flex;
@@ -558,9 +578,16 @@ div.copyright a {
       font-weight: bold;
     }
 
-    #btnCopySlack {
-      justify-self: start;
+    .row-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
     }
+  }
+
+  button.slack {
+    background: #4a154b;
+    color: #fff;
   }
 
   .copyline {
