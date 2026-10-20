@@ -480,6 +480,41 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
   /** 보관함의 모든 이름. 여러 그룹에 있는 사람은 한 번만 */
   const rosterNames = () => [...new Set(roster.filter((line) => !GROUP_LINE.test(line)))];
 
+  /**
+   * 편집 칸 글을 저장할 줄 목록으로 바꾼다. "[그룹 이름]" 줄 다음에 이름을 쉼표나 줄바꿈으로 적는다.
+   * "[개발팀] A, B" 처럼 그룹 줄 뒤에 이어 적어도 된다
+   */
+  function parseRosterText(text: string): string[] {
+    const lines: string[] = [];
+    for (const raw of text.split('\n')) {
+      const header = /^\s*\[([^\]]+)\]\s*(.*)$/.exec(raw);
+      if (header) lines.push(`[${header[1].trim()}]`);
+      const rest = header ? header[2] : raw;
+      lines.push(...rest.split(/[,，]/));
+    }
+    return lines;
+  }
+
+  /** 편집 칸에 보일 글: 그룹 줄 다음 줄에 그 그룹 이름들을 쉼표로 잇는다 */
+  function rosterEditorText(): string {
+    const out: string[] = [];
+    let names: string[] = [];
+    const flushNames = () => {
+      if (names.length > 0) out.push(names.join(', '));
+      names = [];
+    };
+    for (const line of roster) {
+      if (GROUP_LINE.test(line)) {
+        flushNames();
+        out.push(line);
+      } else {
+        names.push(line);
+      }
+    }
+    flushNames();
+    return out.join('\n');
+  }
+
   /** 저장할 줄 정리: 빈 줄을 빼고, 같은 그룹 안에서 겹치는 이름만 합친다 */
   function normalizeRoster(lines: string[]): string[] {
     const out: string[] = [];
@@ -635,7 +670,7 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     prefSet(ROSTER_KEY, JSON.stringify(roster));
     // 보관함은 누르는 순간 서버에 보낸다
     void flushPrefs();
-    rosterEdit.value = roster.join('\n');
+    rosterEdit.value = rosterEditorText();
     renderRoster();
   }
 
@@ -652,20 +687,20 @@ function initSettingsForm(roulette: Roulette): SettingsForm {
     rosterToggle.setAttribute('aria-expanded', String(open));
     rosterToggle.textContent = open ? '편집 닫기' : '보관함 편집';
   }
-  rosterEdit.value = roster.join('\n');
+  rosterEdit.value = rosterEditorText();
   rosterToggle.addEventListener('click', () => {
     setEditorOpen(rosterEditor.hidden);
     if (!rosterEditor.hidden) rosterEdit.focus();
   });
   $('#rosterSave').addEventListener('click', () => {
-    saveRoster(rosterEdit.value.split('\n'));
+    saveRoster(parseRosterText(rosterEdit.value));
     setEditorOpen(false);
     const count = rosterNames().length;
     toast(count ? `이름 보관함에 ${count}명을 저장했습니다.` : '이름 보관함을 비웠습니다.');
   });
   $('#rosterFromNames').addEventListener('click', () => {
     // 편집 중인 내용을 먼저 저장하고, 거기에 없는 이번 참가자를 그룹 없음에 넣는다
-    saveRoster(rosterEdit.value.split('\n'));
+    saveRoster(parseRosterText(rosterEdit.value));
     const added = keepInRoster(getNames().map(bareName));
     toast(added > 0 ? `이번 참가자 ${added}명을 보관함에 넣었습니다.` : '이번 참가자가 모두 보관함에 있습니다.');
   });
