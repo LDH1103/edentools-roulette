@@ -1,4 +1,4 @@
-// 패널·창 색. 어두운 화면이 기본이고, 밝은 테마(html.light)에서 아래 값으로 바뀐다
+// 패널·창 색. 화면은 어두운 테마 하나만 쓴다
 :root {
   --copyright-color: white;
   --ui-panel: #151a25;
@@ -21,30 +21,6 @@
   --ui-ok-text: #9be9a8;
   --ui-warn: #f0a33a;
   --ui-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-
-:root.light {
-  --copyright-color: black;
-  --ui-panel: #ffffff;
-  --ui-panel-border: #d6dce7;
-  --ui-text: #1a2130;
-  --ui-muted: #5a6478;
-  --ui-surface: #eef2f8;
-  --ui-sunken: #f4f6fa;
-  --ui-line: #c9d1de;
-  --ui-field: #ffffff;
-  --ui-accent: #c2410c;
-  --ui-accent-text: #ffffff;
-  --ui-accent-deep: #8f2f08;
-  --ui-accent-soft: rgba(194, 65, 12, 0.1);
-  --ui-danger: #c62f35;
-  --ui-danger-soft: rgba(198, 47, 53, 0.1);
-  --ui-danger-text: #a3242a;
-  --ui-ok: #1f883d;
-  --ui-ok-soft: rgba(31, 136, 61, 0.1);
-  --ui-ok-text: #1a7f37;
-  --ui-warn: #bf7a12;
-  --ui-shadow: 0 10px 30px rgba(20, 30, 50, 0.18);
 }
 
 * {
@@ -308,14 +284,6 @@ div.copyright a {
   cursor: pointer;
 }
 
-.panel .btn-theme {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 15px;
-}
 
 // ---------------------------------------------------------------------------
 // 설정 화면
@@ -331,12 +299,6 @@ div.copyright a {
 }
 
 #settings {
-  .panel-corner {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-  }
-
   .nowrap {
     white-space: nowrap;
   }
@@ -372,7 +334,6 @@ div.copyright a {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding-right: 40px;
 
     .sub {
       color: var(--ui-muted);
@@ -411,6 +372,7 @@ div.copyright a {
   .vault-group-count {
     color: var(--ui-muted);
     font-size: 9.5pt;
+    white-space: nowrap;
   }
 
   .vault-groups {
@@ -421,8 +383,8 @@ div.copyright a {
       display: none;
     }
 
-    // 보관함 칩은 누르면 위로 들어간다
-    .chip::before {
+    // 보관함 칩은 누르면 위로 들어간다 (편집 모드 칩은 제외)
+    .vault-group:not(.editing) .chip::before {
       content: '+';
       margin-right: 4px;
       opacity: 0.8;
@@ -446,6 +408,81 @@ div.copyright a {
 
   .vault-group-title {
     font-weight: bold;
+  }
+
+  // 보관함 편집 모드: 그룹마다 점선 상자, 끌어다 놓을 곳은 강조색
+  .vault-group.editing {
+    padding: 8px;
+    border: 1px dashed var(--ui-line);
+    border-radius: 8px;
+
+    &.drop-target {
+      border-color: var(--ui-accent);
+      background: var(--ui-accent-soft);
+    }
+  }
+
+  .vault-group-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 30px;
+    padding: 0 8px;
+    font-weight: bold;
+  }
+
+  .edit-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 12px;
+    cursor: grab;
+  }
+
+  select.chip-move,
+  select.chip-keep {
+    flex: none;
+    height: 24px;
+    padding: 0 4px;
+    border-radius: 999px;
+    font-size: 9.5pt;
+  }
+
+  select.chip-keep {
+    border: none;
+    background: var(--ui-accent-deep);
+    color: #fff;
+  }
+
+  .chip-del {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--ui-line);
+  }
+
+  .group-add {
+    display: flex;
+    gap: 6px;
+
+    input {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 30px;
+      padding: 0 8px;
+    }
+  }
+
+  .vault-edit-tools {
+    display: grid;
+    gap: 6px;
+  }
+
+  button.confirming {
+    background: var(--ui-danger);
+    border-color: var(--ui-danger);
+    color: #fff;
   }
 
   .chip-keep {
@@ -760,10 +797,6 @@ div.copyright a {
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 12px;
-
-    .btn-theme {
-      margin-left: auto;
-    }
   }
 
   .room-id b {
@@ -1245,12 +1278,23 @@ div.toast {
       min-height: 34px;
     }
 
-    .chip-keep {
+    .chip-keep,
+    .chip-move {
       min-height: 34px;
     }
 
-    .step-btn,
-    .panel-corner {
+    .chip-del {
+      width: 34px;
+      height: 34px;
+      min-height: 34px;
+    }
+
+    .group-add input,
+    .vault-group-name {
+      height: 40px;
+    }
+
+    .step-btn {
       width: 40px;
       height: 40px;
     }
